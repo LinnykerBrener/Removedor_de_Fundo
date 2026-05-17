@@ -9,7 +9,7 @@ import zipfile
 app = Flask(__name__, static_folder=".", static_url_path="")
 CORS(app)
 
-REMOVE_BG_API_KEY = "jpw2KdYsa6o5XeD1cE9P4Mk2"
+REMOVE_BG_API_KEY = "ZJd4zUtMWr8eytgp17MRBjTk"
 OUTPUT_SIZE = (1800, 1800)
 
 
