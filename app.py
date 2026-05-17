@@ -4,14 +4,19 @@ from rembg import remove, new_session
 from PIL import Image
 import io
 import os
+
 os.environ["ONNXRUNTIME_PROVIDERS"] = "CPUExecutionProvider"
 
 app = Flask(__name__, static_folder=".", static_url_path="")
 CORS(app)
 
-print("Carregando modelo de IA... aguarde.")
-session = new_session("silueta")
-print("Modelo carregado! Servidor pronto.")
+session = None
+
+def get_session():
+    global session
+    if session is None:
+        session = new_session("silueta")
+    return session
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "bmp"}
 
@@ -41,13 +46,13 @@ def remove_background():
         input_bytes = file.read()
 
         image = Image.open(io.BytesIO(input_bytes))
-        if max(image.size) > 1024:
-            image.thumbnail((1024, 1024), Image.LANCZOS)
+        if max(image.size) > 800:
+            image.thumbnail((800, 800), Image.LANCZOS)
             buffer = io.BytesIO()
             image.save(buffer, format="PNG")
             input_bytes = buffer.getvalue()
 
-        output_bytes = remove(input_bytes, session=session)
+        output_bytes = remove(input_bytes, session=get_session())
 
         if fundo_branco:
             imagem_sem_fundo = Image.open(io.BytesIO(output_bytes)).convert("RGBA")
