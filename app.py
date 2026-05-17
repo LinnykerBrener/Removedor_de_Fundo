@@ -1,14 +1,23 @@
 from flask import Flask, request, send_file, jsonify
 from flask_cors import CORS
+from rembg import remove, new_session
 from PIL import Image
-import requests
 import io
 import os
+
+os.environ["ONNXRUNTIME_PROVIDERS"] = "CPUExecutionProvider"
 
 app = Flask(__name__, static_folder=".", static_url_path="")
 CORS(app)
 
-REMOVE_BG_API_KEY = "BwrvNfpZ33qsVyp6heGBhxTs"
+session = None
+
+def get_session():
+    global session
+    if session is None:
+        session = new_session("silueta")
+    return session
+
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "bmp"}
 
 def allowed_file(filename):
@@ -36,20 +45,15 @@ def remove_background():
     try:
         input_bytes = file.read()
 
-        # Envia para a API do remove.bg
-        response = requests.post(
-            "https://api.remove.bg/v1.0/removebg",
-            files={"image_file": ("image.png", input_bytes)},
-            data={"size": "auto"},
-            headers={"X-Api-Key": REMOVE_BG_API_KEY},
-        )
+        image = Image.open(io.BytesIO(input_bytes))
+        if max(image.size) > 800:
+            image.thumbnail((800, 800), Image.LANCZOS)
+            buffer = io.BytesIO()
+            image.save(buffer, format="PNG")
+            input_bytes = buffer.getvalue()
 
-        if response.status_code != 200:
-            return jsonify({"error": "Erro na API remove.bg: " + response.text}), 500
+        output_bytes = remove(input_bytes, session=get_session())
 
-        output_bytes = response.content
-
-        # Se quiser fundo branco
         if fundo_branco:
             imagem_sem_fundo = Image.open(io.BytesIO(output_bytes)).convert("RGBA")
             fundo = Image.new("RGBA", imagem_sem_fundo.size, (255, 255, 255, 255))
@@ -69,5 +73,5 @@ def remove_background():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
+    port = int(os.environ.get("PORT", 8080))
     app.run(debug=False, host="0.0.0.0", port=port)
