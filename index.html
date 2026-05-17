@@ -1,496 +1,433 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Removedor de Fundo</title>
+  <title>Removedor de Fundo Pro</title>
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     :root {
-      --bg:       #0a0a0f;
-      --surface:  #111118;
-      --border:   #1e1e2e;
-      --accent:   #6ee7b7;
-      --accent2:  #38bdf8;
-      --text:     #e2e8f0;
-      --muted:    #64748b;
-      --danger:   #f87171;
+      --bg: #0a0a0f; --surface: #111118; --surface2: #16161f;
+      --border: #1e1e2e; --accent: #6ee7b7; --accent2: #38bdf8;
+      --text: #e2e8f0; --muted: #64748b; --danger: #f87171;
     }
-
     body {
-      background: var(--bg);
-      color: var(--text);
+      background: var(--bg); color: var(--text);
       font-family: 'DM Sans', sans-serif;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 2rem 1rem 4rem;
-      position: relative;
-      overflow-x: hidden;
+      min-height: 100vh; padding: 2rem 1rem 4rem;
+      display: flex; flex-direction: column; align-items: center;
+      overflow-x: hidden; position: relative;
     }
-
     body::before, body::after {
-      content: '';
-      position: fixed;
-      border-radius: 50%;
-      filter: blur(120px);
-      opacity: 0.12;
-      pointer-events: none;
-      z-index: 0;
+      content: ''; position: fixed; border-radius: 50%;
+      filter: blur(120px); opacity: 0.1; pointer-events: none; z-index: 0;
     }
-    body::before {
-      width: 600px; height: 600px;
-      background: var(--accent);
-      top: -200px; left: -200px;
-    }
-    body::after {
-      width: 500px; height: 500px;
-      background: var(--accent2);
-      bottom: -150px; right: -150px;
-    }
+    body::before { width: 600px; height: 600px; background: var(--accent); top: -200px; left: -200px; }
+    body::after  { width: 500px; height: 500px; background: var(--accent2); bottom: -150px; right: -150px; }
 
-    header {
-      z-index: 1;
-      text-align: center;
-      margin-bottom: 3rem;
-      padding-top: 1rem;
+    header { z-index: 1; text-align: center; margin-bottom: 2.5rem; }
+    .badge {
+      display: inline-block; margin-bottom: 0.75rem;
+      padding: 0.3rem 0.9rem; border: 1px solid var(--accent);
+      border-radius: 999px; font-size: 0.7rem; font-weight: 600;
+      letter-spacing: 2px; text-transform: uppercase;
+      color: var(--accent); background: rgba(110,231,183,0.07);
     }
-
     header h1 {
       font-family: 'Syne', sans-serif;
-      font-size: clamp(2rem, 6vw, 3.5rem);
-      font-weight: 800;
+      font-size: clamp(1.8rem, 5vw, 3rem); font-weight: 800;
       background: linear-gradient(135deg, var(--accent), var(--accent2));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      line-height: 1.1;
-      letter-spacing: -1px;
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text; letter-spacing: -1px; line-height: 1.1;
     }
+    header p { margin-top: 0.5rem; color: var(--muted); font-size: 0.9rem; }
 
-    header p {
-      margin-top: 0.75rem;
-      color: var(--muted);
-      font-size: 1rem;
-      font-weight: 300;
+    .container { z-index: 1; width: 100%; max-width: 960px; display: flex; flex-direction: column; gap: 1.5rem; }
+
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 20px; padding: 1.5rem;
     }
-
-    .badge {
-      display: inline-block;
+    .card-title {
+      font-family: 'Syne', sans-serif; font-size: 0.7rem; font-weight: 600;
+      letter-spacing: 2px; text-transform: uppercase; color: var(--muted);
       margin-bottom: 1rem;
-      padding: 0.3rem 0.9rem;
-      border: 1px solid var(--accent);
-      border-radius: 999px;
-      font-size: 0.7rem;
-      font-weight: 600;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      color: var(--accent);
-      background: rgba(110,231,183,0.07);
     }
 
-    .workspace {
-      z-index: 1;
-      width: 100%;
-      max-width: 900px;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1.5rem;
-    }
-
-    @media (max-width: 640px) {
-      .workspace { grid-template-columns: 1fr; }
-    }
-
-    .panel {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 1.5rem;
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    }
-
-    .panel-label {
-      font-family: 'Syne', sans-serif;
-      font-size: 0.7rem;
-      font-weight: 600;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      color: var(--muted);
-    }
-
-    #drop-zone {
-      border: 2px dashed var(--border);
-      border-radius: 14px;
-      padding: 2.5rem 1.5rem;
-      text-align: center;
-      cursor: pointer;
+    /* Drop zone */
+    .drop-zone {
+      border: 2px dashed var(--border); border-radius: 14px;
+      padding: 2rem 1.5rem; text-align: center; cursor: pointer;
       transition: border-color 0.2s, background 0.2s;
     }
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--accent); background: rgba(110,231,183,0.04);
+    }
+    .drop-zone svg { width: 40px; height: 40px; stroke: var(--muted); margin-bottom: 0.75rem; transition: stroke 0.2s; }
+    .drop-zone:hover svg { stroke: var(--accent); }
+    .drop-zone p { color: var(--muted); font-size: 0.85rem; line-height: 1.6; }
+    .drop-zone strong { color: var(--text); }
 
-    #drop-zone:hover, #drop-zone.drag-over {
-      border-color: var(--accent);
-      background: rgba(110,231,183,0.04);
+    /* Grid de produtos */
+    .products-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 0.75rem; margin-top: 1rem;
+    }
+    .product-item {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 12px; overflow: hidden; position: relative;
+    }
+    .product-item img {
+      width: 100%; height: 120px; object-fit: cover; display: block;
+      background: repeating-conic-gradient(#1a1a2e 0% 25%, #111118 0% 50%) 0 0/16px 16px;
+    }
+    .product-item .item-name {
+      padding: 0.4rem 0.6rem; font-size: 0.72rem; color: var(--muted);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .product-item .remove-btn {
+      position: absolute; top: 6px; right: 6px;
+      background: rgba(248,113,113,0.9); border: none; border-radius: 50%;
+      width: 22px; height: 22px; cursor: pointer; color: white;
+      font-size: 12px; display: flex; align-items: center; justify-content: center;
     }
 
-    #drop-zone svg {
-      width: 48px; height: 48px;
-      stroke: var(--muted);
-      margin-bottom: 1rem;
-      transition: stroke 0.2s;
+    /* Opções / toggles */
+    .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width: 600px) { .options-grid { grid-template-columns: 1fr; } }
+
+    .option-card {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 14px; padding: 1rem;
     }
-    #drop-zone:hover svg { stroke: var(--accent); }
-
-    #drop-zone p { color: var(--muted); font-size: 0.9rem; line-height: 1.6; }
-    #drop-zone strong { color: var(--text); }
-
-    #file-input { display: none; }
-
-    .img-preview {
-      width: 100%;
-      border-radius: 12px;
-      object-fit: contain;
-      max-height: 320px;
-      display: none;
+    .option-header {
+      display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;
     }
+    .option-label { font-size: 0.85rem; font-weight: 500; color: var(--text); }
+    .option-desc { font-size: 0.75rem; color: var(--muted); margin-top: 0.2rem; }
 
-    /* Toggle de fundo */
-    .toggle-wrap {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 0.75rem 1rem;
-    }
-
-    .toggle-wrap span {
-      font-size: 0.85rem;
-      color: var(--text);
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .toggle-wrap small {
-      display: block;
-      font-size: 0.72rem;
-      color: var(--muted);
-      margin-top: 0.1rem;
-    }
-
-    .switch {
-      position: relative;
-      width: 44px;
-      height: 24px;
-      flex-shrink: 0;
-    }
-
+    .switch { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
     .switch input { display: none; }
-
     .slider {
-      position: absolute;
-      inset: 0;
-      background: var(--border);
-      border-radius: 999px;
-      cursor: pointer;
-      transition: background 0.25s;
+      position: absolute; inset: 0; background: var(--border);
+      border-radius: 999px; cursor: pointer; transition: background 0.25s;
     }
-
     .slider::before {
-      content: '';
-      position: absolute;
-      width: 18px; height: 18px;
-      left: 3px; top: 3px;
-      background: white;
-      border-radius: 50%;
-      transition: transform 0.25s;
+      content: ''; position: absolute; width: 18px; height: 18px;
+      left: 3px; top: 3px; background: white; border-radius: 50%; transition: transform 0.25s;
     }
-
     .switch input:checked + .slider { background: var(--accent); }
     .switch input:checked + .slider::before { transform: translateX(20px); }
 
-    /* Botões */
-    .btn {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.5rem;
-      padding: 0.85rem 1.5rem;
-      border-radius: 12px;
-      font-family: 'DM Sans', sans-serif;
-      font-size: 0.9rem;
-      font-weight: 500;
-      cursor: pointer;
-      border: none;
+    /* Upload extra (caixinha / veículo) */
+    .extra-upload { display: none; margin-top: 0.75rem; flex-direction: column; gap: 0.75rem; }
+    .extra-upload.visible { display: flex; }
+
+    .mini-drop {
+      border: 2px dashed var(--border); border-radius: 10px;
+      padding: 0.75rem; text-align: center; cursor: pointer;
+      font-size: 0.8rem; color: var(--muted); transition: border-color 0.2s;
+    }
+    .mini-drop:hover { border-color: var(--accent2); color: var(--accent2); }
+    .mini-drop.has-file { border-color: var(--accent); color: var(--accent); }
+
+    .select-product {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 0.5rem 0.75rem; color: var(--text);
+      font-family: 'DM Sans', sans-serif; font-size: 0.8rem; width: 100%;
+    }
+    .select-product option { background: var(--surface); }
+
+    /* Botão principal */
+    .btn-process {
+      width: 100%; padding: 1rem; border-radius: 14px; border: none;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #0a0a0f; font-family: 'Syne', sans-serif;
+      font-size: 1rem; font-weight: 700; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 0.5rem;
       transition: opacity 0.2s, transform 0.15s;
     }
-    .btn:active { transform: scale(0.97); }
-    .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+    .btn-process:hover:not(:disabled) { opacity: 0.9; }
+    .btn-process:active:not(:disabled) { transform: scale(0.98); }
+    .btn-process:disabled { opacity: 0.4; cursor: not-allowed; }
 
-    .btn-primary {
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
-      color: #0a0a0f;
-    }
-
-    .btn-outline {
-      background: transparent;
-      border: 1px solid var(--border);
-      color: var(--text);
-    }
-    .btn-outline:hover:not(:disabled) {
-      border-color: var(--accent2);
-      color: var(--accent2);
-    }
-
-    .progress-wrap {
-      height: 4px;
-      background: var(--border);
-      border-radius: 4px;
-      overflow: hidden;
-      display: none;
-    }
-
+    /* Progress */
+    .progress-wrap { height: 4px; background: var(--border); border-radius: 4px; overflow: hidden; display: none; }
     .progress-bar {
-      height: 100%;
-      width: 0%;
+      height: 100%; width: 0%; border-radius: 4px;
       background: linear-gradient(90deg, var(--accent), var(--accent2));
-      border-radius: 4px;
-      transition: width 0.3s;
-      animation: pulse-bar 1.5s ease-in-out infinite;
+      transition: width 0.4s; animation: pulse 1.5s ease-in-out infinite;
     }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
 
-    @keyframes pulse-bar {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.6; }
-    }
-
-    #status {
-      font-size: 0.82rem;
-      text-align: center;
-      min-height: 1.2rem;
-      color: var(--muted);
-    }
+    #status { font-size: 0.82rem; text-align: center; min-height: 1.2rem; color: var(--muted); }
     #status.error { color: var(--danger); }
     #status.success { color: var(--accent); }
 
-    .empty-out {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 0.5rem;
-      color: var(--muted);
-      font-size: 0.85rem;
-      border: 2px dashed var(--border);
-      border-radius: 14px;
-      padding: 2.5rem;
-      text-align: center;
+    /* Resultado */
+    .result-card { display: none; }
+    .result-card.visible { display: block; }
+    .btn-download {
+      display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+      width: 100%; padding: 0.85rem; border-radius: 12px; border: 1px solid var(--accent);
+      background: transparent; color: var(--accent);
+      font-family: 'DM Sans', sans-serif; font-size: 0.9rem; font-weight: 500;
+      cursor: pointer; transition: background 0.2s;
     }
-    .empty-out svg { width: 40px; height: 40px; stroke: var(--border); margin-bottom: 0.5rem; }
-
-    /* Preview com fundo xadrez (transparente) ou branco */
-    #preview-out {
-      background: repeating-conic-gradient(#1a1a2e 0% 25%, #111118 0% 50%) 0 0 / 20px 20px;
-      border-radius: 12px;
-    }
-    #preview-out.white-bg {
-      background: #ffffff;
-    }
-
-    footer {
-      z-index: 1;
-      margin-top: 3rem;
-      color: var(--muted);
-      font-size: 0.78rem;
-      text-align: center;
-      line-height: 1.8;
-    }
-    footer code {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 0.15rem 0.5rem;
-      font-size: 0.75rem;
-      color: var(--accent2);
-    }
+    .btn-download:hover { background: rgba(110,231,183,0.08); }
   </style>
 </head>
 <body>
 
 <header>
-  <div class="badge">IA · Remoção de Fundo</div>
-  <h1>Removedor<br>de Fundo</h1>
-  <p>Faça upload de qualquer imagem e receba o resultado em segundos.</p>
+  <div class="badge">IA · Remoção de Fundo Pro</div>
+  <h1>Removedor de Fundo Pro</h1>
+  <p>Múltiplas fotos, colagens com caixinha e veículo — tudo em 1800×1800px</p>
 </header>
 
-<div class="workspace">
+<div class="container">
 
-  <!-- Painel Esquerdo: Upload -->
-  <div class="panel">
-    <span class="panel-label">Imagem original</span>
-
-    <div id="drop-zone">
+  <!-- PRODUTOS -->
+  <div class="card">
+    <div class="card-title">📦 Fotos dos Produtos</div>
+    <div class="drop-zone" id="drop-products">
       <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
         <path d="M3 15v3a3 3 0 003 3h12a3 3 0 003-3v-3"/>
-        <polyline points="8 10 12 6 16 10"/>
-        <line x1="12" y1="6" x2="12" y2="18"/>
+        <polyline points="8 10 12 6 16 10"/><line x1="12" y1="6" x2="12" y2="18"/>
       </svg>
-      <p><strong>Clique para escolher</strong> ou arraste uma imagem aqui<br>
-      <small>PNG · JPG · WEBP · BMP</small></p>
-      <input type="file" id="file-input" accept="image/png,image/jpeg,image/webp,image/bmp"/>
+      <p><strong>Clique ou arraste</strong> para adicionar fotos dos produtos<br>
+      <small>PNG · JPG · WEBP · BMP — múltiplos arquivos permitidos</small></p>
+      <input type="file" id="input-products" multiple accept="image/*" style="display:none"/>
     </div>
+    <div class="products-grid" id="products-grid"></div>
+  </div>
 
-    <img id="preview-in" class="img-preview" alt="Pré-visualização"/>
+  <!-- OPÇÕES -->
+  <div class="card">
+    <div class="card-title">⚙️ Opções</div>
+    <div class="options-grid">
 
-    <!-- Toggle fundo branco -->
-    <div class="toggle-wrap">
-      <span>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="2"/>
-        </svg>
-        <div>
-          Fundo branco
-          <small>Desligado = fundo transparente (PNG)</small>
+      <!-- Fundo branco -->
+      <div class="option-card">
+        <div class="option-header">
+          <div>
+            <div class="option-label">Fundo branco</div>
+            <div class="option-desc">Desligado = fundo transparente</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="toggle-branco"/>
+            <span class="slider"></span>
+          </label>
         </div>
-      </span>
-      <label class="switch">
-        <input type="checkbox" id="toggle-branco"/>
-        <span class="slider"></span>
-      </label>
-    </div>
+      </div>
 
-    <button class="btn btn-primary" id="btn-remove" disabled>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <!-- Caixinha -->
+      <div class="option-card">
+        <div class="option-header">
+          <div>
+            <div class="option-label">Colagem com caixinha</div>
+            <div class="option-desc">Produto ao lado da caixa</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="toggle-box"/>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="extra-upload" id="box-upload">
+          <div class="mini-drop" id="drop-box">
+            📦 Clique para enviar foto da caixinha
+            <input type="file" id="input-box" accept="image/*" style="display:none"/>
+          </div>
+          <select class="select-product" id="select-box-product">
+            <option value="">— Escolha o produto para usar —</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Veículo -->
+      <div class="option-card">
+        <div class="option-header">
+          <div>
+            <div class="option-label">Colagem com veículo</div>
+            <div class="option-desc">Produto ao lado do carro</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="toggle-vehicle"/>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="extra-upload" id="vehicle-upload">
+          <div class="mini-drop" id="drop-vehicle">
+            🚗 Clique para enviar foto do veículo
+            <input type="file" id="input-vehicle" accept="image/*" style="display:none"/>
+          </div>
+          <select class="select-product" id="select-vehicle-product">
+            <option value="">— Escolha o produto para usar —</option>
+          </select>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- PROCESSAR -->
+  <div class="card">
+    <button class="btn-process" id="btn-process" disabled>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="10"/><path d="M9 9l6 6M15 9l-6 6"/>
       </svg>
-      Remover Fundo
+      Processar Imagens
     </button>
-
+    <br>
     <div class="progress-wrap" id="progress-wrap">
       <div class="progress-bar" id="progress-bar"></div>
     </div>
-
+    <br>
     <div id="status"></div>
   </div>
 
-  <!-- Painel Direito: Resultado -->
-  <div class="panel">
-    <span class="panel-label">Resultado</span>
-
-    <div class="empty-out" id="empty-out">
-      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="3" y="3" width="18" height="18" rx="3"/>
-        <path d="M3 9l4-4 4 4 4-4 4 4"/>
-        <path d="M3 15l4 4 4-4 4 4 4-4"/>
-      </svg>
-      O resultado aparecerá aqui
-    </div>
-
-    <img id="preview-out" class="img-preview" alt="Resultado sem fundo" style="display:none; max-height:320px; object-fit:contain; width:100%;"/>
-
-    <button class="btn btn-outline" id="btn-download" style="display:none">
+  <!-- RESULTADO -->
+  <div class="card result-card" id="result-card">
+    <div class="card-title">✅ Resultado</div>
+    <button class="btn-download" id="btn-download">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-        <polyline points="7 10 12 15 17 10"/>
-        <line x1="12" y1="15" x2="12" y2="3"/>
+        <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
       </svg>
-      Baixar imagem
+      Baixar todas as imagens (.zip)
     </button>
   </div>
 
 </div>
 
-<footer>
-  Backend: <code>Flask</code> + <code>rembg[cpu]</code> · Modelo: <code>u2netp</code> · 
-  Inicie com <code>python app.py</code>
-</footer>
-
 <script>
-  const dropZone     = document.getElementById('drop-zone');
-  const fileInput    = document.getElementById('file-input');
-  const previewIn    = document.getElementById('preview-in');
-  const previewOut   = document.getElementById('preview-out');
-  const emptyOut     = document.getElementById('empty-out');
-  const btnRemove    = document.getElementById('btn-remove');
-  const btnDownload  = document.getElementById('btn-download');
-  const progressWrap = document.getElementById('progress-wrap');
-  const progressBar  = document.getElementById('progress-bar');
-  const statusEl     = document.getElementById('status');
-  const toggleBranco = document.getElementById('toggle-branco');
+  const productFiles = [];
+  let boxFile = null;
+  let vehicleFile = null;
+  let resultBlob = null;
 
-  let selectedFile = null;
-  let resultBlob   = null;
+  // --- Produtos ---
+  const dropProducts = document.getElementById('drop-products');
+  const inputProducts = document.getElementById('input-products');
+  const productsGrid = document.getElementById('products-grid');
 
-  // Drag & drop
-  dropZone.addEventListener('click', () => fileInput.click());
-  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
-  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
-  dropZone.addEventListener('drop', e => {
-    e.preventDefault();
-    dropZone.classList.remove('drag-over');
-    const f = e.dataTransfer.files[0];
-    if (f) loadFile(f);
-  });
-  fileInput.addEventListener('change', () => { if (fileInput.files[0]) loadFile(fileInput.files[0]); });
+  dropProducts.addEventListener('click', () => inputProducts.click());
+  dropProducts.addEventListener('dragover', e => { e.preventDefault(); dropProducts.classList.add('drag-over'); });
+  dropProducts.addEventListener('dragleave', () => dropProducts.classList.remove('drag-over'));
+  dropProducts.addEventListener('drop', e => { e.preventDefault(); dropProducts.classList.remove('drag-over'); addProducts(e.dataTransfer.files); });
+  inputProducts.addEventListener('change', () => addProducts(inputProducts.files));
 
-  function loadFile(file) {
-    selectedFile = file;
-    previewIn.src = URL.createObjectURL(file);
-    previewIn.style.display = 'block';
-    dropZone.style.display = 'none';
-    btnRemove.disabled = false;
-    setStatus('');
-    resetOutput();
+  function addProducts(files) {
+    Array.from(files).forEach(f => {
+      productFiles.push(f);
+      const idx = productFiles.length - 1;
+      const div = document.createElement('div');
+      div.className = 'product-item';
+      div.dataset.idx = idx;
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(f);
+      const name = document.createElement('div');
+      name.className = 'item-name';
+      name.textContent = f.name;
+      const btn = document.createElement('button');
+      btn.className = 'remove-btn';
+      btn.innerHTML = '×';
+      btn.onclick = () => { productFiles.splice(idx, 1); div.remove(); updateSelects(); checkReady(); };
+      div.appendChild(img); div.appendChild(name); div.appendChild(btn);
+      productsGrid.appendChild(div);
+    });
+    updateSelects();
+    checkReady();
   }
 
-  function resetOutput() {
-    previewOut.style.display = 'none';
-    emptyOut.style.display = 'flex';
-    btnDownload.style.display = 'none';
-    resultBlob = null;
+  function updateSelects() {
+    ['select-box-product', 'select-vehicle-product'].forEach(id => {
+      const sel = document.getElementById(id);
+      const val = sel.value;
+      sel.innerHTML = '<option value="">— Escolha o produto para usar —</option>';
+      productFiles.forEach((f, i) => {
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = `Produto ${i+1}: ${f.name.substring(0,20)}`;
+        sel.appendChild(opt);
+      });
+      sel.value = val;
+    });
+  }
+
+  // --- Toggles ---
+  document.getElementById('toggle-box').addEventListener('change', function() {
+    document.getElementById('box-upload').classList.toggle('visible', this.checked);
+  });
+  document.getElementById('toggle-vehicle').addEventListener('change', function() {
+    document.getElementById('vehicle-upload').classList.toggle('visible', this.checked);
+  });
+
+  // --- Caixinha upload ---
+  const dropBox = document.getElementById('drop-box');
+  const inputBox = document.getElementById('input-box');
+  dropBox.addEventListener('click', () => inputBox.click());
+  inputBox.addEventListener('change', () => {
+    boxFile = inputBox.files[0];
+    if (boxFile) { dropBox.textContent = '✅ ' + boxFile.name; dropBox.classList.add('has-file'); }
+  });
+
+  // --- Veículo upload ---
+  const dropVehicle = document.getElementById('drop-vehicle');
+  const inputVehicle = document.getElementById('input-vehicle');
+  dropVehicle.addEventListener('click', () => inputVehicle.click());
+  inputVehicle.addEventListener('change', () => {
+    vehicleFile = inputVehicle.files[0];
+    if (vehicleFile) { dropVehicle.textContent = '✅ ' + vehicleFile.name; dropVehicle.classList.add('has-file'); }
+  });
+
+  // --- Verificação ---
+  function checkReady() {
+    document.getElementById('btn-process').disabled = productFiles.length === 0;
   }
 
   function setStatus(msg, type = '') {
-    statusEl.textContent = msg;
-    statusEl.className = type;
+    const el = document.getElementById('status');
+    el.textContent = msg; el.className = type;
   }
 
-  // Atualiza o preview ao mudar o toggle
-  toggleBranco.addEventListener('change', () => {
-    if (previewOut.style.display !== 'none') {
-      previewOut.classList.toggle('white-bg', toggleBranco.checked);
-    }
-  });
+  // --- Processar ---
+  document.getElementById('btn-process').addEventListener('click', async () => {
+    const btnProcess = document.getElementById('btn-process');
+    const progressWrap = document.getElementById('progress-wrap');
+    const progressBar = document.getElementById('progress-bar');
 
-  // Envio para o backend
-  btnRemove.addEventListener('click', async () => {
-    if (!selectedFile) return;
-
-    btnRemove.disabled = true;
+    btnProcess.disabled = true;
     progressWrap.style.display = 'block';
-    progressBar.style.width = '20%';
-    setStatus('Enviando imagem…');
-    resetOutput();
+    progressBar.style.width = '10%';
+    setStatus('Enviando imagens...');
+    document.getElementById('result-card').classList.remove('visible');
 
     const formData = new FormData();
-    formData.append('image', selectedFile);
-    formData.append('fundo_branco', toggleBranco.checked ? 'true' : 'false');
+    productFiles.forEach(f => formData.append('images[]', f));
+    formData.append('fundo_branco', document.getElementById('toggle-branco').checked ? 'true' : 'false');
+
+    const useBox = document.getElementById('toggle-box').checked;
+    const useVehicle = document.getElementById('toggle-vehicle').checked;
+
+    if (useBox && boxFile) {
+      formData.append('box_image', boxFile);
+      formData.append('box_product_index', document.getElementById('select-box-product').value);
+    }
+
+    if (useVehicle && vehicleFile) {
+      formData.append('vehicle_image', vehicleFile);
+      formData.append('vehicle_product_index', document.getElementById('select-vehicle-product').value);
+    }
 
     try {
-      progressBar.style.width = '50%';
-      setStatus('Processando… isso pode levar alguns segundos.');
+      progressBar.style.width = '40%';
+      setStatus(`Processando ${productFiles.length} imagem(ns)... pode demorar alguns segundos.`);
 
-      const response = await fetch('/remove-bg', { method: 'POST', body: formData });
+      const response = await fetch('/process', { method: 'POST', body: formData });
 
-      progressBar.style.width = '85%';
+      progressBar.style.width = '90%';
 
       if (!response.ok) {
         const err = await response.json();
@@ -498,33 +435,26 @@
       }
 
       resultBlob = await response.blob();
-      const resultUrl = URL.createObjectURL(resultBlob);
-
-      previewOut.src = resultUrl;
-      previewOut.style.display = 'block';
-      previewOut.classList.toggle('white-bg', toggleBranco.checked);
-      emptyOut.style.display = 'none';
-      btnDownload.style.display = 'flex';
-
       progressBar.style.width = '100%';
       setTimeout(() => { progressWrap.style.display = 'none'; progressBar.style.width = '0%'; }, 600);
 
-      setStatus('✓ Processado com sucesso!', 'success');
+      setStatus(`✓ ${productFiles.length} imagem(ns) processada(s) com sucesso!`, 'success');
+      document.getElementById('result-card').classList.add('visible');
+
     } catch (err) {
       progressWrap.style.display = 'none';
-      progressBar.style.width = '0%';
       setStatus('Erro: ' + err.message, 'error');
     } finally {
-      btnRemove.disabled = false;
+      btnProcess.disabled = false;
     }
   });
 
-  // Download
-  btnDownload.addEventListener('click', () => {
+  // --- Download ---
+  document.getElementById('btn-download').addEventListener('click', () => {
     if (!resultBlob) return;
     const a = document.createElement('a');
     a.href = URL.createObjectURL(resultBlob);
-    a.download = toggleBranco.checked ? 'fundo_branco.png' : 'sem_fundo.png';
+    a.download = 'imagens_processadas.zip';
     a.click();
   });
 </script>
