@@ -1,0 +1,4 @@
+flask
+flask-cors
+rembg[cpu]
+pillow
