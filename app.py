@@ -10,7 +10,7 @@ app = Flask(__name__, static_folder=".", static_url_path="")
 CORS(app)
 
 print("Carregando modelo de IA... aguarde.")
-session = new_session("u2netp")
+session = new_session("silueta")
 print("Modelo carregado! Servidor pronto.")
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "bmp"}
