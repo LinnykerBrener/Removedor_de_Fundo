@@ -4,6 +4,7 @@ from rembg import remove, new_session
 from PIL import Image
 import io
 import os
+os.environ["ONNXRUNTIME_PROVIDERS"] = "CPUExecutionProvider"
 
 app = Flask(__name__, static_folder=".", static_url_path="")
 CORS(app)
