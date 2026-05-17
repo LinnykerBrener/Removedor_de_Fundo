@@ -10,8 +10,8 @@ app = Flask(__name__, static_folder=".", static_url_path="")
 CORS(app)
 
 REMOVE_BG_API_KEY = "BwrvNfpZ33qsVyp6heGBhxTs"
-ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "bmp"}
 OUTPUT_SIZE = (1800, 1800)
+ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "bmp"}
 
 
 def allowed_file(filename):
@@ -30,55 +30,86 @@ def remove_background(image_bytes):
     return response.content
 
 
-def fit_into_canvas(img_bytes, fundo_branco):
-    """Coloca imagem PNG em canvas 1800x1800 com padding"""
-    img = Image.open(io.BytesIO(img_bytes)).convert("RGBA")
-    img.thumbnail((OUTPUT_SIZE[0] - 80, OUTPUT_SIZE[1] - 80), Image.LANCZOS)
-
-    if fundo_branco:
-        canvas = Image.new("RGB", OUTPUT_SIZE, (255, 255, 255))
-        # Cria versão RGB da imagem colando sobre branco
-        bg = Image.new("RGBA", img.size, (255, 255, 255, 255))
-        bg.paste(img, mask=img.split()[3])
-        img_rgb = bg.convert("RGB")
-        x = (OUTPUT_SIZE[0] - img_rgb.width) // 2
-        y = (OUTPUT_SIZE[1] - img_rgb.height) // 2
-        canvas.paste(img_rgb, (x, y))
-    else:
-        canvas = Image.new("RGBA", OUTPUT_SIZE, (0, 0, 0, 0))
-        x = (OUTPUT_SIZE[0] - img.width) // 2
-        y = (OUTPUT_SIZE[1] - img.height) // 2
-        canvas.paste(img, (x, y), img)
-
-    buf = io.BytesIO()
-    canvas.save(buf, format="PNG")
-    return buf.getvalue()
+def place_centered(canvas, img, max_w, max_h, offset_x=0, offset_y=0):
+    """Coloca imagem centralizada no canvas dentro de um box"""
+    img = img.copy()
+    img.thumbnail((max_w, max_h), Image.LANCZOS)
+    x = offset_x + (max_w - img.width) // 2
+    y = offset_y + (max_h - img.height) // 2
+    canvas.paste(img, (x, y), img)
+    return canvas
 
 
-def create_collage(product_no_bg_bytes, extra_no_bg_bytes, fundo_branco):
-    """Cria colagem lado a lado: [Produto | Extra] em 1800x1800"""
+def make_product_canvas(product_no_bg_bytes, fundo_branco,
+                         box_no_bg_bytes=None, vehicle_no_bg_bytes=None):
+    """
+    Monta canvas 1800x1800:
+    - Produto centralizado ocupando ~80% do canvas
+    - Caixinha no canto inferior direito (~30% do canvas)
+    - Veículo no canto superior direito (~35% do canvas)
+    """
+    W, H = OUTPUT_SIZE
+
+    # Canvas base branco
     canvas = Image.new("RGBA", OUTPUT_SIZE, (255, 255, 255, 255))
-    half_w = OUTPUT_SIZE[0] // 2
-    full_h = OUTPUT_SIZE[1]
 
-    # Produto (esquerda)
+    # --- Produto centralizado e grande ---
     prod_img = Image.open(io.BytesIO(product_no_bg_bytes)).convert("RGBA")
-    prod_img.thumbnail((half_w - 60, full_h - 60), Image.LANCZOS)
-    px = (half_w - prod_img.width) // 2
-    py = (full_h - prod_img.height) // 2
+    prod_max = int(W * 0.82)  # 82% do canvas
+    prod_img.thumbnail((prod_max, prod_max), Image.LANCZOS)
+    px = (W - prod_img.width) // 2
+    py = (H - prod_img.height) // 2
     canvas.paste(prod_img, (px, py), prod_img)
 
-    # Extra (direita)
-    extra_img = Image.open(io.BytesIO(extra_no_bg_bytes)).convert("RGBA")
-    extra_img.thumbnail((half_w - 60, full_h - 60), Image.LANCZOS)
-    ex = half_w + (half_w - extra_img.width) // 2
-    ey = (full_h - extra_img.height) // 2
-    canvas.paste(extra_img, (ex, ey), extra_img)
+    # --- Caixinha: canto inferior direito ---
+    if box_no_bg_bytes:
+        box_img = Image.open(io.BytesIO(box_no_bg_bytes)).convert("RGBA")
+        box_max = int(W * 0.32)  # 32% do canvas
+        box_img.thumbnail((box_max, box_max), Image.LANCZOS)
+        margin = 40
+        bx = W - box_img.width - margin
+        by = H - box_img.height - margin
+        canvas.paste(box_img, (bx, by), box_img)
 
+    # --- Veículo: canto superior direito ---
+    if vehicle_no_bg_bytes:
+        veh_img = Image.open(io.BytesIO(vehicle_no_bg_bytes)).convert("RGBA")
+        veh_max_w = int(W * 0.40)  # 40% largura
+        veh_max_h = int(H * 0.35)  # 35% altura
+        veh_img.thumbnail((veh_max_w, veh_max_h), Image.LANCZOS)
+        margin = 40
+        vx = W - veh_img.width - margin
+        vy = margin
+        canvas.paste(veh_img, (vx, vy), veh_img)
+
+    # Aplica fundo
     if fundo_branco:
         result = canvas.convert("RGB")
     else:
-        result = canvas
+        # Fundo transparente — remove o branco do canvas
+        canvas_transp = Image.new("RGBA", OUTPUT_SIZE, (0, 0, 0, 0))
+        # Cola produto
+        prod_img2 = Image.open(io.BytesIO(product_no_bg_bytes)).convert("RGBA")
+        prod_img2.thumbnail((prod_max, prod_max), Image.LANCZOS)
+        px2 = (W - prod_img2.width) // 2
+        py2 = (H - prod_img2.height) // 2
+        canvas_transp.paste(prod_img2, (px2, py2), prod_img2)
+
+        if box_no_bg_bytes:
+            box_img2 = Image.open(io.BytesIO(box_no_bg_bytes)).convert("RGBA")
+            box_img2.thumbnail((int(W * 0.32), int(W * 0.32)), Image.LANCZOS)
+            bx2 = W - box_img2.width - 40
+            by2 = H - box_img2.height - 40
+            canvas_transp.paste(box_img2, (bx2, by2), box_img2)
+
+        if vehicle_no_bg_bytes:
+            veh_img2 = Image.open(io.BytesIO(vehicle_no_bg_bytes)).convert("RGBA")
+            veh_img2.thumbnail((int(W * 0.40), int(H * 0.35)), Image.LANCZOS)
+            vx2 = W - veh_img2.width - 40
+            vy2 = 40
+            canvas_transp.paste(veh_img2, (vx2, vy2), veh_img2)
+
+        result = canvas_transp
 
     buf = io.BytesIO()
     result.save(buf, format="PNG")
@@ -104,38 +135,45 @@ def process():
         return jsonify({"error": "Nenhuma imagem de produto enviada."}), 400
 
     try:
-        # Lê todos os produtos em memória primeiro
+        # Lê todos em memória
         product_bytes_list = [f.read() for f in product_files]
 
         # Remove fundo de todos os produtos
-        products_no_bg = []
-        for pb in product_bytes_list:
-            no_bg = remove_background(pb)
-            products_no_bg.append(no_bg)
+        products_no_bg = [remove_background(pb) for pb in product_bytes_list]
+
+        # Remove fundo da caixinha e veículo se existirem
+        box_no_bg = remove_background(box_file.read()) if box_file and box_product_index != "" else None
+        vehicle_no_bg = remove_background(vehicle_file.read()) if vehicle_file and vehicle_product_index != "" else None
+
+        box_idx = int(box_product_index) if box_product_index != "" else None
+        vehicle_idx = int(vehicle_product_index) if vehicle_product_index != "" else None
 
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-
-            # Produtos individuais
             for i, no_bg in enumerate(products_no_bg):
-                result = fit_into_canvas(no_bg, fundo_branco)
+
+                # Define se esse produto leva caixinha e/ou veículo
+                use_box = box_no_bg if box_idx == i else None
+                use_vehicle = vehicle_no_bg if vehicle_idx == i else None
+
+                result = make_product_canvas(no_bg, fundo_branco, use_box, use_vehicle)
                 zf.writestr(f"produto_{i+1}.png", result)
 
-            # Colagem com caixinha
-            if box_file and box_product_index != "":
-                idx = int(box_product_index)
-                box_bytes = box_file.read()
-                box_no_bg = remove_background(box_bytes)
-                collage = create_collage(products_no_bg[idx], box_no_bg, fundo_branco)
-                zf.writestr("colagem_caixinha.png", collage)
+            # Se o mesmo produto foi escolhido para ambos, gera versão com os dois
+            if box_idx is not None and vehicle_idx is not None and box_idx == vehicle_idx:
+                result = make_product_canvas(
+                    products_no_bg[box_idx], fundo_branco, box_no_bg, vehicle_no_bg
+                )
+                zf.writestr(f"produto_{box_idx+1}_completo.png", result)
 
-            # Colagem com veículo
-            if vehicle_file and vehicle_product_index != "":
-                idx = int(vehicle_product_index)
-                vehicle_bytes = vehicle_file.read()
-                vehicle_no_bg = remove_background(vehicle_bytes)
-                collage = create_collage(products_no_bg[idx], vehicle_no_bg, fundo_branco)
-                zf.writestr("colagem_veiculo.png", collage)
+            # Se produtos diferentes foram escolhidos, gera cada um separado
+            elif box_idx is not None and vehicle_idx is not None and box_idx != vehicle_idx:
+                # Produto com caixinha
+                result_box = make_product_canvas(products_no_bg[box_idx], fundo_branco, box_no_bg, None)
+                zf.writestr(f"produto_{box_idx+1}_com_caixinha.png", result_box)
+                # Produto com veículo
+                result_veh = make_product_canvas(products_no_bg[vehicle_idx], fundo_branco, None, vehicle_no_bg)
+                zf.writestr(f"produto_{vehicle_idx+1}_com_veiculo.png", result_veh)
 
         zip_buffer.seek(0)
         return send_file(
