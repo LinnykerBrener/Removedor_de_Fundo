@@ -55,7 +55,6 @@
       margin-bottom: 1rem;
     }
 
-    /* Drop zone */
     .drop-zone {
       border: 2px dashed var(--border); border-radius: 14px;
       padding: 2rem 1.5rem; text-align: center; cursor: pointer;
@@ -69,7 +68,6 @@
     .drop-zone p { color: var(--muted); font-size: 0.85rem; line-height: 1.6; }
     .drop-zone strong { color: var(--text); }
 
-    /* Grid de produtos */
     .products-grid {
       display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
       gap: 0.75rem; margin-top: 1rem;
@@ -93,7 +91,6 @@
       font-size: 12px; display: flex; align-items: center; justify-content: center;
     }
 
-    /* Opções / toggles */
     .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
     @media (max-width: 600px) { .options-grid { grid-template-columns: 1fr; } }
 
@@ -120,7 +117,6 @@
     .switch input:checked + .slider { background: var(--accent); }
     .switch input:checked + .slider::before { transform: translateX(20px); }
 
-    /* Upload extra (caixinha / veículo) */
     .extra-upload { display: none; margin-top: 0.75rem; flex-direction: column; gap: 0.75rem; }
     .extra-upload.visible { display: flex; }
 
@@ -139,7 +135,6 @@
     }
     .select-product option { background: var(--surface); }
 
-    /* Botão principal */
     .btn-process {
       width: 100%; padding: 1rem; border-radius: 14px; border: none;
       background: linear-gradient(135deg, var(--accent), var(--accent2));
@@ -152,7 +147,6 @@
     .btn-process:active:not(:disabled) { transform: scale(0.98); }
     .btn-process:disabled { opacity: 0.4; cursor: not-allowed; }
 
-    /* Progress */
     .progress-wrap { height: 4px; background: var(--border); border-radius: 4px; overflow: hidden; display: none; }
     .progress-bar {
       height: 100%; width: 0%; border-radius: 4px;
@@ -165,7 +159,6 @@
     #status.error { color: var(--danger); }
     #status.success { color: var(--accent); }
 
-    /* Resultado */
     .result-card { display: none; }
     .result-card.visible { display: block; }
     .btn-download {
@@ -188,7 +181,6 @@
 
 <div class="container">
 
-  <!-- PRODUTOS -->
   <div class="card">
     <div class="card-title">📦 Fotos dos Produtos</div>
     <div class="drop-zone" id="drop-products">
@@ -203,12 +195,10 @@
     <div class="products-grid" id="products-grid"></div>
   </div>
 
-  <!-- OPÇÕES -->
   <div class="card">
     <div class="card-title">⚙️ Opções</div>
     <div class="options-grid">
 
-      <!-- Fundo branco -->
       <div class="option-card">
         <div class="option-header">
           <div>
@@ -222,7 +212,6 @@
         </div>
       </div>
 
-      <!-- Caixinha -->
       <div class="option-card">
         <div class="option-header">
           <div>
@@ -245,7 +234,6 @@
         </div>
       </div>
 
-      <!-- Veículo -->
       <div class="option-card">
         <div class="option-header">
           <div>
@@ -271,7 +259,6 @@
     </div>
   </div>
 
-  <!-- PROCESSAR -->
   <div class="card">
     <button class="btn-process" id="btn-process" disabled>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -287,7 +274,6 @@
     <div id="status"></div>
   </div>
 
-  <!-- RESULTADO -->
   <div class="card result-card" id="result-card">
     <div class="card-title">✅ Resultado</div>
     <button class="btn-download" id="btn-download">
@@ -307,7 +293,6 @@
   let vehicleFile = null;
   let resultBlob = null;
 
-  // --- Produtos ---
   const dropProducts = document.getElementById('drop-products');
   const inputProducts = document.getElementById('input-products');
   const productsGrid = document.getElementById('products-grid');
@@ -356,7 +341,6 @@
     });
   }
 
-  // --- Toggles ---
   document.getElementById('toggle-box').addEventListener('change', function() {
     document.getElementById('box-upload').classList.toggle('visible', this.checked);
   });
@@ -364,7 +348,6 @@
     document.getElementById('vehicle-upload').classList.toggle('visible', this.checked);
   });
 
-  // --- Caixinha upload ---
   const dropBox = document.getElementById('drop-box');
   const inputBox = document.getElementById('input-box');
   dropBox.addEventListener('click', () => inputBox.click());
@@ -373,7 +356,6 @@
     if (boxFile) { dropBox.textContent = '✅ ' + boxFile.name; dropBox.classList.add('has-file'); }
   });
 
-  // --- Veículo upload ---
   const dropVehicle = document.getElementById('drop-vehicle');
   const inputVehicle = document.getElementById('input-vehicle');
   dropVehicle.addEventListener('click', () => inputVehicle.click());
@@ -382,7 +364,6 @@
     if (vehicleFile) { dropVehicle.textContent = '✅ ' + vehicleFile.name; dropVehicle.classList.add('has-file'); }
   });
 
-  // --- Verificação ---
   function checkReady() {
     document.getElementById('btn-process').disabled = productFiles.length === 0;
   }
@@ -392,7 +373,6 @@
     el.textContent = msg; el.className = type;
   }
 
-  // --- Processar ---
   document.getElementById('btn-process').addEventListener('click', async () => {
     const btnProcess = document.getElementById('btn-process');
     const progressWrap = document.getElementById('progress-wrap');
@@ -404,28 +384,31 @@
     setStatus('Enviando imagens...');
     document.getElementById('result-card').classList.remove('visible');
 
-    const formData = new FormData();
-    productFiles.forEach(f => formData.append('images[]', f));
-    formData.append('fundo_branco', document.getElementById('toggle-branco').checked ? 'true' : 'false');
-
     const useBox = document.getElementById('toggle-box').checked;
     const useVehicle = document.getElementById('toggle-vehicle').checked;
 
+    const formData = new FormData();
+
+    productFiles.forEach(f => formData.append('produtos', f));
+    formData.append('fundo_branco', document.getElementById('toggle-branco').checked ? 'true' : 'false');
+
+    formData.append('usar_caixinha', useBox ? 'true' : 'false');
     if (useBox && boxFile) {
-      formData.append('box_image', boxFile);
-      formData.append('box_product_index', document.getElementById('select-box-product').value);
+      formData.append('caixinha', boxFile);
+      formData.append('idx_caixinha', document.getElementById('select-box-product').value);
     }
 
+    formData.append('usar_veiculo', useVehicle ? 'true' : 'false');
     if (useVehicle && vehicleFile) {
-      formData.append('vehicle_image', vehicleFile);
-      formData.append('vehicle_product_index', document.getElementById('select-vehicle-product').value);
+      formData.append('veiculo', vehicleFile);
+      formData.append('idx_veiculo', document.getElementById('select-vehicle-product').value);
     }
 
     try {
       progressBar.style.width = '40%';
       setStatus(`Processando ${productFiles.length} imagem(ns)... pode demorar alguns segundos.`);
 
-      const response = await fetch('/process', { method: 'POST', body: formData });
+      const response = await fetch('/remove-bg', { method: 'POST', body: formData });
 
       progressBar.style.width = '90%';
 
@@ -449,7 +432,6 @@
     }
   });
 
-  // --- Download ---
   document.getElementById('btn-download').addEventListener('click', () => {
     if (!resultBlob) return;
     const a = document.createElement('a');
