@@ -20,6 +20,7 @@ ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "bmp"}
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
+# ─── Remoção de fundo ─────────────────────────────────────────
 def remove_bg(image_bytes):
     image = Image.open(io.BytesIO(image_bytes))
     if max(image.size) > 1200:
@@ -29,23 +30,21 @@ def remove_bg(image_bytes):
     return remove(buf.getvalue(), session=session)
 
 def to_white_bg(rgba_bytes):
-    img = Image.open(io.BytesIO(rgba_bytes)).convert("RGBA")
+    img   = Image.open(io.BytesIO(rgba_bytes)).convert("RGBA")
     fundo = Image.new("RGBA", img.size, (255, 255, 255, 255))
     fundo.paste(img, mask=img.split()[3])
     return fundo.convert("RGBA")
 
+# ─── Helpers de composição ────────────────────────────────────
 def resize_to_scale(img, canvas_size, escala):
-    """Redimensiona a imagem para ocupar 'escala' do canvas, mantendo proporção."""
-    img = img.copy()
-    max_dim = int(canvas_size * escala)
-    # Calcula novo tamanho mantendo proporção
-    w, h = img.size
+    """Redimensiona mantendo proporção para ocupar 'escala' do canvas."""
+    img   = img.copy()
+    w, h  = img.size
     if w == 0 or h == 0:
         return img
-    ratio = min(max_dim / w, max_dim / h)
-    new_w = int(w * ratio)
-    new_h = int(h * ratio)
-    return img.resize((new_w, new_h), Image.LANCZOS)
+    max_dim = int(canvas_size * escala)
+    ratio   = min(max_dim / w, max_dim / h)
+    return img.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
 
 def paste_rgba(canvas, img, x, y):
     if img.mode == "RGBA":
@@ -53,40 +52,98 @@ def paste_rgba(canvas, img, x, y):
     else:
         canvas.paste(img, (x, y))
 
-def make_canvas(produto_img, extra_img=None, posicao_extra=None,
-                escala_produto=0.90, escala_extra=0.40):
+# ─── Canvas: produto isolado ──────────────────────────────────
+def make_canvas_produto(produto_img, escala_produto=0.90):
     CANVAS = 1800
-    MARGIN = 40
-
-    canvas = Image.new("RGBA", (CANVAS, CANVAS), (255, 255, 255, 255))
-
-    # Produto
+    canvas  = Image.new("RGBA", (CANVAS, CANVAS), (255, 255, 255, 255))
     produto = resize_to_scale(produto_img.convert("RGBA"), CANVAS, escala_produto)
-    px = (CANVAS - produto.width) // 2
+    px = (CANVAS - produto.width)  // 2
     py = (CANVAS - produto.height) // 2
     paste_rgba(canvas, produto, px, py)
-
-    # Extra (caixinha ou veículo)
-    if extra_img is not None:
-        extra = resize_to_scale(extra_img.convert("RGBA"), CANVAS, escala_extra)
-        if posicao_extra == "inferior_direito":
-            ex = CANVAS - extra.width - MARGIN
-            ey = CANVAS - extra.height - MARGIN
-        else:  # superior_direito
-            ex = CANVAS - extra.width - MARGIN
-            ey = MARGIN
-        paste_rgba(canvas, extra, ex, ey)
-
-    # Achata para RGB com fundo branco
     fundo = Image.new("RGB", (CANVAS, CANVAS), (255, 255, 255))
     fundo.paste(canvas, mask=canvas.split()[3])
     return fundo
 
+# ─── Canvas: produto + caixinha (inferior direito) ────────────
+def make_canvas_com_caixinha(produto_img, caixinha_img,
+                              escala_produto=0.90, escala_caixinha=0.40,
+                              offset_x=0, offset_y=0):
+    """
+    offset_x/offset_y: -100..100
+    +X → move para direita, +Y → move para baixo
+    ±100 equivale a ±20% do canvas (±360px no 1800×1800)
+    """
+    CANVAS = 1800
+    MARGIN = 40
+    canvas  = Image.new("RGBA", (CANVAS, CANVAS), (255, 255, 255, 255))
 
+    # Produto centrado
+    produto = resize_to_scale(produto_img.convert("RGBA"), CANVAS, escala_produto)
+    px = (CANVAS - produto.width)  // 2
+    py = (CANVAS - produto.height) // 2
+    paste_rgba(canvas, produto, px, py)
+
+    # Caixinha — base: inferior direito + offset
+    caixa  = resize_to_scale(caixinha_img.convert("RGBA"), CANVAS, escala_caixinha)
+    delta_x = int((offset_x / 100.0) * CANVAS * 0.20)
+    delta_y = int((offset_y / 100.0) * CANVAS * 0.20)
+    cx = CANVAS - caixa.width  - MARGIN + delta_x
+    cy = CANVAS - caixa.height - MARGIN + delta_y
+    paste_rgba(canvas, caixa, cx, cy)
+
+    fundo = Image.new("RGB", (CANVAS, CANVAS), (255, 255, 255))
+    fundo.paste(canvas, mask=canvas.split()[3])
+    return fundo
+
+# ─── Canvas: produto + veículo (superior direito) ────────────
+def make_canvas_com_veiculo(produto_img, veiculo_img,
+                             escala_produto=0.90, escala_veiculo=0.40,
+                             offset_x=0, offset_y=0):
+    """
+    offset_x/offset_y: -100..100
+    +X → move para direita, +Y → move para baixo
+    ±100 equivale a ±20% do canvas (±360px no 1800×1800)
+    """
+    CANVAS = 1800
+    MARGIN = 40
+    canvas  = Image.new("RGBA", (CANVAS, CANVAS), (255, 255, 255, 255))
+
+    # Produto centrado
+    produto = resize_to_scale(produto_img.convert("RGBA"), CANVAS, escala_produto)
+    px = (CANVAS - produto.width)  // 2
+    py = (CANVAS - produto.height) // 2
+    paste_rgba(canvas, produto, px, py)
+
+    # Veículo — base: superior direito + offset
+    veiculo = resize_to_scale(veiculo_img.convert("RGBA"), CANVAS, escala_veiculo)
+    delta_x = int((offset_x / 100.0) * CANVAS * 0.20)
+    delta_y = int((offset_y / 100.0) * CANVAS * 0.20)
+    vx = CANVAS - veiculo.width  - MARGIN + delta_x
+    vy = MARGIN + delta_y
+    paste_rgba(canvas, veiculo, vx, vy)
+
+    fundo = Image.new("RGB", (CANVAS, CANVAS), (255, 255, 255))
+    fundo.paste(canvas, mask=canvas.split()[3])
+    return fundo
+
+# ─── Helpers de parse ─────────────────────────────────────────
+def parse_float_pct(val, default, lo=0.30, hi=1.50):
+    try:
+        v = float(val) / 100.0
+        return max(lo, min(hi, v))
+    except (TypeError, ValueError):
+        return default
+
+def parse_int_offset(val, default=0, lo=-100, hi=100):
+    try:
+        return max(lo, min(hi, int(val)))
+    except (TypeError, ValueError):
+        return default
+
+# ─── Rotas ────────────────────────────────────────────────────
 @app.route("/")
 def index():
     return app.send_static_file("index.html")
-
 
 @app.route("/remove-bg", methods=["POST"])
 def remove_background():
@@ -94,29 +151,21 @@ def remove_background():
     usar_caixinha = request.form.get("usar_caixinha", "false").lower() == "true"
     usar_veiculo  = request.form.get("usar_veiculo",  "false").lower() == "true"
 
-    try:
-        idx_caixinha = int(request.form.get("idx_caixinha", "-1"))
-    except ValueError:
-        idx_caixinha = -1
-    try:
-        idx_veiculo = int(request.form.get("idx_veiculo", "-1"))
-    except ValueError:
-        idx_veiculo = -1
+    idx_caixinha = parse_int_offset(request.form.get("idx_caixinha", "-1"), -1, -1, 9999)
+    idx_veiculo  = parse_int_offset(request.form.get("idx_veiculo",  "-1"), -1, -1, 9999)
 
-    # Escalas: frontend envia 30-150, backend converte para 0.30-1.50
-    try:
-        escala_produto = float(request.form.get("escala_produto", "90")) / 100.0
-        escala_produto = max(0.30, min(1.50, escala_produto))
-    except ValueError:
-        escala_produto = 0.90
+    escala_produto  = parse_float_pct(request.form.get("escala_produto",  "90"),  0.90)
+    escala_caixinha = parse_float_pct(request.form.get("escala_caixinha", "40"),  0.40)
+    escala_veiculo  = parse_float_pct(request.form.get("escala_veiculo",  "40"),  0.40)
 
-    try:
-        escala_extra = float(request.form.get("escala_extra", "40")) / 100.0
-        escala_extra = max(0.30, min(1.50, escala_extra))
-    except ValueError:
-        escala_extra = 0.40
+    offset_box_x    = parse_int_offset(request.form.get("offset_box_x",    "0"))
+    offset_box_y    = parse_int_offset(request.form.get("offset_box_y",    "0"))
+    offset_vehicle_x= parse_int_offset(request.form.get("offset_vehicle_x","0"))
+    offset_vehicle_y= parse_int_offset(request.form.get("offset_vehicle_y","0"))
 
-    print(f"[DEBUG] escala_produto={escala_produto:.2f} escala_extra={escala_extra:.2f}")
+    print(f"[DEBUG] prod={escala_produto:.2f} "
+          f"caixa={escala_caixinha:.2f} off=({offset_box_x},{offset_box_y}) "
+          f"veiculo={escala_veiculo:.2f} off=({offset_vehicle_x},{offset_vehicle_y})")
 
     produtos_files = request.files.getlist("produtos")
     if not produtos_files:
@@ -149,39 +198,49 @@ def remove_background():
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
 
-            # Produtos individuais
+            # ── Produtos individuais (sem colagem) ──
             for i, (nome_original, _) in enumerate(produtos_bytes):
                 if i in indices_colagem:
                     continue
-                prod_rgba = Image.open(io.BytesIO(produtos_sem_fundo[i])).convert("RGBA")
+                prod_img = Image.open(io.BytesIO(produtos_sem_fundo[i])).convert("RGBA")
                 if fundo_branco:
-                    prod_entrada = to_white_bg(produtos_sem_fundo[i])
-                else:
-                    prod_entrada = prod_rgba
-                canvas = make_canvas(prod_entrada, escala_produto=escala_produto)
+                    prod_img = to_white_bg(produtos_sem_fundo[i])
+                canvas = make_canvas_produto(prod_img, escala_produto=escala_produto)
                 buf = io.BytesIO()
                 canvas.save(buf, format="PNG")
                 zf.writestr(os.path.splitext(nome_original)[0] + ".png", buf.getvalue())
 
-            # Colagem caixinha
+            # ── Colagem caixinha ──
             if usar_caixinha and caixinha_sem_fundo and 0 <= idx_caixinha < len(produtos_sem_fundo):
-                prod_rgba = Image.open(io.BytesIO(produtos_sem_fundo[idx_caixinha])).convert("RGBA")
+                prod_img  = Image.open(io.BytesIO(produtos_sem_fundo[idx_caixinha])).convert("RGBA")
                 caixa_img = Image.open(io.BytesIO(caixinha_sem_fundo)).convert("RGBA")
-                prod_entrada = to_white_bg(produtos_sem_fundo[idx_caixinha]) if fundo_branco else prod_rgba
-                canvas = make_canvas(prod_entrada, caixa_img, "inferior_direito",
-                                     escala_produto=escala_produto, escala_extra=escala_extra)
+                if fundo_branco:
+                    prod_img = to_white_bg(produtos_sem_fundo[idx_caixinha])
+                canvas = make_canvas_com_caixinha(
+                    prod_img, caixa_img,
+                    escala_produto=escala_produto,
+                    escala_caixinha=escala_caixinha,
+                    offset_x=offset_box_x,
+                    offset_y=offset_box_y
+                )
                 buf = io.BytesIO()
                 canvas.save(buf, format="PNG")
                 nome_base = os.path.splitext(produtos_bytes[idx_caixinha][0])[0]
                 zf.writestr(f"{nome_base}_com_caixinha.png", buf.getvalue())
 
-            # Colagem veículo
+            # ── Colagem veículo ──
             if usar_veiculo and veiculo_sem_fundo and 0 <= idx_veiculo < len(produtos_sem_fundo):
-                prod_rgba   = Image.open(io.BytesIO(produtos_sem_fundo[idx_veiculo])).convert("RGBA")
+                prod_img    = Image.open(io.BytesIO(produtos_sem_fundo[idx_veiculo])).convert("RGBA")
                 veiculo_img = Image.open(io.BytesIO(veiculo_sem_fundo)).convert("RGBA")
-                prod_entrada = to_white_bg(produtos_sem_fundo[idx_veiculo]) if fundo_branco else prod_rgba
-                canvas = make_canvas(prod_entrada, veiculo_img, "superior_direito",
-                                     escala_produto=escala_produto, escala_extra=escala_extra)
+                if fundo_branco:
+                    prod_img = to_white_bg(produtos_sem_fundo[idx_veiculo])
+                canvas = make_canvas_com_veiculo(
+                    prod_img, veiculo_img,
+                    escala_produto=escala_produto,
+                    escala_veiculo=escala_veiculo,
+                    offset_x=offset_vehicle_x,
+                    offset_y=offset_vehicle_y
+                )
                 buf = io.BytesIO()
                 canvas.save(buf, format="PNG")
                 nome_base = os.path.splitext(produtos_bytes[idx_veiculo][0])[0]
