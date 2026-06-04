@@ -3,7 +3,7 @@ from flask_cors import CORS
 from rembg import remove, new_session
 from PIL import Image, ImageFilter
 import numpy as np
-from scipy.ndimage import binary_erosion, binary_dilation, gaussian_filter
+import cv2
 import io
 import os
 import zipfile
@@ -14,83 +14,117 @@ app = Flask(__name__, static_folder=".", static_url_path="")
 CORS(app)
 
 print("Carregando modelo de IA... aguarde.")
-session = new_session("u2net")
+session = new_session("isnet-general-use")   # ← modelo superior ao u2net para bordas
 print("Modelo carregado! Servidor pronto.")
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "bmp"}
-
-# ─── Constantes de composição ─────────────────────────────────
 CANVAS = 1800
 
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# ─── Remoção de fundo + limpeza de sombra ────────────────────
+# ─────────────────────────────────────────────────────────────
+#  REMOÇÃO DE FUNDO
+# ─────────────────────────────────────────────────────────────
 def remove_bg(image_bytes):
-    """Remove o fundo com rembg e depois aplica limpeza de sombra/semitransparência."""
+    """Remove fundo com rembg e aplica pós-processamento profissional."""
     image = Image.open(io.BytesIO(image_bytes))
     if max(image.size) > 1200:
         image.thumbnail((1200, 1200), Image.LANCZOS)
     buf = io.BytesIO()
     image.save(buf, format="PNG")
     raw = remove(buf.getvalue(), session=session)
-    return clean_shadow(raw)
+    cleaned = remove_internal_holes(raw)   # ← abre os furos/grades internos
+    return refine_edges(cleaned)           # ← suaviza bordas sem fechá-los
 
-def clean_shadow(rgba_bytes, alpha_threshold=30, erode_px=1, feather_radius=1.2):
+
+def remove_internal_holes(rgba_bytes):
     """
-    Remove sombras e semitransparências residuais preservando detalhes finos
-    (grades, furos, malhas) — abordagem por morfologia binária.
+    Detecta e remove ilhas de fundo presas DENTRO do objeto (furos, grades, malhas).
 
-    Pipeline:
-    1. Threshold inicial SUAVE: elimina apenas pixels quase invisíveis (alpha < 30).
-       Um threshold baixo preserva os pixels de borda que formam as grades.
-    2. Erosão binária leve: encolhe a máscara 1px para separar sombras grudadas.
-    3. Dilatação binária: restaura o tamanho original sem reabsorver os buracos
-       que foram abertos pela erosão — é aqui que os furos/grades são preservados.
-    4. Gaussian blur MUITO leve na borda para suavizar serrilhado sem fechar furos.
-    5. Threshold final para reafirmar a máscara limpa.
+    O rembg remove o fundo externo mas deixa os "buracos internos" opacos porque
+    o modelo os classifica como parte do objeto.
 
-    Por que isso é melhor que threshold duro + blur (abordagem anterior):
-    - O threshold duro (≥128) cortava pixels de borda válidos das grades.
-    - O GaussianBlur espalhava pixels opacos para dentro dos furos, fechando-os.
-    - A morfologia trabalha com a ESTRUTURA da máscara, não com os valores de alpha,
-      portanto respeita naturalmente os buracos internos do objeto.
+    Estratégia — flood fill a partir das bordas:
+    1. Binariza o alpha (opaco / transparente).
+    2. Inverte: fundo=255, objeto=0.
+    3. Flood fill a partir do pixel (0,0) → pinta de cinza (128) SOMENTE
+       o fundo que toca as bordas (= fundo externo já removido pelo rembg).
+    4. Pixels que ainda são 255 depois do flood = furos INTERNOS (não
+       conectados à borda) → tornamos transparentes.
+    5. Erosão leve para limpar ruído de borda sem destruir detalhes finos.
     """
-    img  = Image.open(io.BytesIO(rgba_bytes)).convert("RGBA")
-    data = np.array(img)
-    alpha = data[:, :, 3].astype(np.float32)
+    img   = Image.open(io.BytesIO(rgba_bytes)).convert("RGBA")
+    data  = np.array(img)
+    alpha = data[:, :, 3]
 
-    # ── 1. Threshold suave: descarta apenas sombras muito transparentes ──────
-    mask = (alpha >= alpha_threshold)          # bool array
+    # ── 1. Binariza ──────────────────────────────────────────
+    binary   = (alpha > 30).astype(np.uint8) * 255   # objeto=255, fundo=0
+    inverted = cv2.bitwise_not(binary)                # objeto=0,   fundo=255
 
-    # ── 2. Erosão leve: separa halos e sombras grudadas na borda ─────────────
-    struct = np.ones((erode_px * 2 + 1, erode_px * 2 + 1), dtype=bool)
-    mask_eroded = binary_erosion(mask, structure=struct)
+    # ── 2. Flood fill pelo fundo externo (começa no canto) ───
+    h, w      = inverted.shape
+    flood_img = inverted.copy()
+    flood_mask = np.zeros((h + 2, w + 2), dtype=np.uint8)
+    cv2.floodFill(flood_img, flood_mask, (0, 0), 128)
 
-    # ── 3. Dilatação: restaura o tamanho mas os furos internos permanecem ────
-    mask_dilated = binary_dilation(mask_eroded, structure=struct)
+    # Garante que todas as 4 bordas sejam alcançadas
+    # (peças encostadas na borda podem bloquear um único ponto de partida)
+    for pt in [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)]:
+        cv2.floodFill(flood_img, flood_mask, pt, 128)
 
-    # ── 4. Gaussian blur leve para suavizar a borda (sem fechar furos) ───────
-    mask_float = mask_dilated.astype(np.float32)
-    mask_smooth = gaussian_filter(mask_float, sigma=feather_radius)
+    # ── 3. Furos internos = ainda 255 após o flood ───────────
+    internal_holes = (flood_img == 255)
 
-    # ── 5. Threshold final suave para reafirmar bordas limpas ────────────────
-    final_alpha = np.clip(mask_smooth * 255, 0, 255).astype(np.uint8)
+    # ── 4. Remove furos internos ─────────────────────────────
+    new_alpha = alpha.copy()
+    new_alpha[internal_holes] = 0
+
+    # ── 5. Erosão leve para limpar ruído de borda ────────────
+    kernel    = np.ones((2, 2), np.uint8)
+    new_alpha = cv2.erode(new_alpha, kernel, iterations=1)
+    # Dilata de volta para não encolher a peça
+    new_alpha = cv2.dilate(new_alpha, kernel, iterations=1)
 
     result = img.copy()
-    result.putalpha(Image.fromarray(final_alpha, mode='L'))
+    result.putalpha(Image.fromarray(new_alpha))
 
     buf = io.BytesIO()
     result.save(buf, format="PNG")
     return buf.getvalue()
 
+
+def refine_edges(rgba_bytes, feather=0.8):
+    """
+    Suavização leve de borda com Gaussian sigma baixo.
+    Aplicado DEPOIS do flood fill para não reintroduzir halos.
+    """
+    img   = Image.open(io.BytesIO(rgba_bytes)).convert("RGBA")
+    alpha = np.array(img.split()[3], dtype=np.float32)
+
+    from scipy.ndimage import gaussian_filter
+    smooth = gaussian_filter(alpha, sigma=feather)
+
+    # Mantém pixels opacos como opacos (só suaviza a transição de borda)
+    final = np.where(alpha > 200, alpha, smooth).astype(np.uint8)
+
+    result = img.copy()
+    result.putalpha(Image.fromarray(final))
+
+    buf = io.BytesIO()
+    result.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+# ─────────────────────────────────────────────────────────────
+#  HELPERS DE COMPOSIÇÃO
+# ─────────────────────────────────────────────────────────────
 def to_white_bg(rgba_bytes):
     img   = Image.open(io.BytesIO(rgba_bytes)).convert("RGBA")
     fundo = Image.new("RGBA", img.size, (255, 255, 255, 255))
     fundo.paste(img, mask=img.split()[3])
     return fundo.convert("RGBA")
 
-# ─── Helpers de composição ────────────────────────────────────
 def resize_to_scale(img, canvas_size, escala):
     img  = img.copy()
     w, h = img.size
@@ -107,13 +141,12 @@ def paste_rgba(canvas, img, x, y):
         canvas.paste(img, (x, y))
 
 def calc_free_pos(canvas_size, img_w, img_h, pos_x, pos_y):
-    cx = canvas_size / 2 + (pos_x / 100.0) * (canvas_size / 2)
-    cy = canvas_size / 2 + (pos_y / 100.0) * (canvas_size / 2)
+    cx   = canvas_size / 2 + (pos_x / 100.0) * (canvas_size / 2)
+    cy   = canvas_size / 2 + (pos_y / 100.0) * (canvas_size / 2)
     left = int(cx - img_w / 2)
     top  = int(cy - img_h / 2)
     return left, top
 
-# ─── Canvas: produto isolado ──────────────────────────────────
 def make_canvas_produto(produto_img, escala_produto=0.90):
     canvas  = Image.new("RGBA", (CANVAS, CANVAS), (255, 255, 255, 255))
     produto = resize_to_scale(produto_img.convert("RGBA"), CANVAS, escala_produto)
@@ -124,7 +157,6 @@ def make_canvas_produto(produto_img, escala_produto=0.90):
     fundo.paste(canvas, mask=canvas.split()[3])
     return fundo
 
-# ─── Canvas: produto + elemento secundário ───────────────────
 def make_canvas_com_elemento(produto_img, elemento_img,
                               escala_produto=0.90, escala_elemento=0.40,
                               pos_x=0, pos_y=0):
@@ -133,14 +165,13 @@ def make_canvas_com_elemento(produto_img, elemento_img,
     px = (CANVAS - produto.width)  // 2
     py = (CANVAS - produto.height) // 2
     paste_rgba(canvas, produto, px, py)
-    elem  = resize_to_scale(elemento_img.convert("RGBA"), CANVAS, escala_elemento)
-    ex, ey = calc_free_pos(CANVAS, elem.width, elem.height, pos_x, pos_y)
+    elem    = resize_to_scale(elemento_img.convert("RGBA"), CANVAS, escala_elemento)
+    ex, ey  = calc_free_pos(CANVAS, elem.width, elem.height, pos_x, pos_y)
     paste_rgba(canvas, elem, ex, ey)
     fundo = Image.new("RGB", (CANVAS, CANVAS), (255, 255, 255))
     fundo.paste(canvas, mask=canvas.split()[3])
     return fundo
 
-# ─── Helpers de parse ─────────────────────────────────────────
 def parse_float_pct(val, default, lo=0.10, hi=1.50):
     try:
         v = float(val) / 100.0
@@ -154,7 +185,9 @@ def parse_int_pos(val, default=0, lo=-100, hi=100):
     except (TypeError, ValueError):
         return default
 
-# ─── Rotas ────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
+#  ROTAS
+# ─────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
     return app.send_static_file("index.html")
@@ -212,7 +245,6 @@ def remove_background():
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
 
-            # ── Produtos individuais ──
             for i, (nome_original, _) in enumerate(produtos_bytes):
                 if i in indices_colagem:
                     continue
@@ -224,7 +256,6 @@ def remove_background():
                 canvas_img.save(buf, format="PNG")
                 zf.writestr(os.path.splitext(nome_original)[0] + ".png", buf.getvalue())
 
-            # ── Colagem caixinha ──
             if usar_caixinha and caixinha_sem_fundo and 0 <= idx_caixinha < len(produtos_sem_fundo):
                 prod_img  = Image.open(io.BytesIO(produtos_sem_fundo[idx_caixinha])).convert("RGBA")
                 caixa_img = Image.open(io.BytesIO(caixinha_sem_fundo)).convert("RGBA")
@@ -232,17 +263,13 @@ def remove_background():
                     prod_img = to_white_bg(produtos_sem_fundo[idx_caixinha])
                 canvas_img = make_canvas_com_elemento(
                     prod_img, caixa_img,
-                    escala_produto=escala_produto,
-                    escala_elemento=escala_caixinha,
-                    pos_x=pos_box_x,
-                    pos_y=pos_box_y
-                )
+                    escala_produto=escala_produto, escala_elemento=escala_caixinha,
+                    pos_x=pos_box_x, pos_y=pos_box_y)
                 buf = io.BytesIO()
                 canvas_img.save(buf, format="PNG")
                 nome_base = os.path.splitext(produtos_bytes[idx_caixinha][0])[0]
                 zf.writestr(f"{nome_base}_com_caixinha.png", buf.getvalue())
 
-            # ── Colagem veículo ──
             if usar_veiculo and veiculo_sem_fundo and 0 <= idx_veiculo < len(produtos_sem_fundo):
                 prod_img    = Image.open(io.BytesIO(produtos_sem_fundo[idx_veiculo])).convert("RGBA")
                 veiculo_img = Image.open(io.BytesIO(veiculo_sem_fundo)).convert("RGBA")
@@ -250,11 +277,8 @@ def remove_background():
                     prod_img = to_white_bg(produtos_sem_fundo[idx_veiculo])
                 canvas_img = make_canvas_com_elemento(
                     prod_img, veiculo_img,
-                    escala_produto=escala_produto,
-                    escala_elemento=escala_veiculo,
-                    pos_x=pos_vehicle_x,
-                    pos_y=pos_vehicle_y
-                )
+                    escala_produto=escala_produto, escala_elemento=escala_veiculo,
+                    pos_x=pos_vehicle_x, pos_y=pos_vehicle_y)
                 buf = io.BytesIO()
                 canvas_img.save(buf, format="PNG")
                 nome_base = os.path.splitext(produtos_bytes[idx_veiculo][0])[0]
