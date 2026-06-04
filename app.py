@@ -42,7 +42,7 @@ def remove_bg(image_bytes):
     return refine_edges(cleaned)
 
 
-def remove_internal_holes(rgba_bytes, white_thresh=230, min_hole_px=10):
+def remove_internal_holes(rgba_bytes, white_thresh=160, min_hole_px=10):
     """
     Remove ilhas de fundo presas DENTRO do objeto (furos, grades, malhas).
 
@@ -62,11 +62,11 @@ def remove_internal_holes(rgba_bytes, white_thresh=230, min_hole_px=10):
     alpha = data[:, :, 3]
     r, g, b = data[:, :, 0], data[:, :, 1], data[:, :, 2]
 
-    # Pixels "brancos/claros" com alpha alto = fundo não removido
+    # Pixels claros com alpha alto = fundo não removido (externo ou interno)
+    # Usa brilho médio para capturar tanto branco puro quanto cinza/metálico
+    brightness = (r + g + b) / 3.0
     is_bg_color = (
-        (r > white_thresh) &
-        (g > white_thresh) &
-        (b > white_thresh) &
+        (brightness > white_thresh) &   # captura branco puro E cinza claro
         (alpha > 200)
     )
 
