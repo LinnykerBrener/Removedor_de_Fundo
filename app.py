@@ -1,8 +1,9 @@
 from flask import Flask, request, send_file, jsonify
 from flask_cors import CORS
 from rembg import remove, new_session
-from PIL import Image
+from PIL import Image, ImageFilter
 import numpy as np
+from scipy.ndimage import binary_erosion, binary_dilation, gaussian_filter
 import io
 import os
 import zipfile
@@ -19,15 +20,6 @@ print("Modelo carregado! Servidor pronto.")
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "bmp"}
 
 # ─── Constantes de composição ─────────────────────────────────
-# DEVEM espelhar EXATAMENTE as constantes do index.html (JS)
-#
-# Sistema de posição LIVRE:
-#   pos_x, pos_y ∈ [-100, 100]
-#   0, 0 = centro do canvas
-#   O CENTRO da imagem secundária fica em:
-#     cx = CANVAS/2 + (pos_x/100) * (CANVAS/2)
-#     cy = CANVAS/2 + (pos_y/100) * (CANVAS/2)
-#   Portanto ±100 leva o centro até a borda do canvas.
 CANVAS = 1800
 
 def allowed_file(filename):
@@ -44,39 +36,46 @@ def remove_bg(image_bytes):
     raw = remove(buf.getvalue(), session=session)
     return clean_shadow(raw)
 
-def clean_shadow(rgba_bytes, alpha_threshold=128, feather=2):
+def clean_shadow(rgba_bytes, alpha_threshold=30, erode_px=1, feather_radius=1.2):
     """
-    Remove sombras e semitransparências residuais deixadas pelo rembg.
+    Remove sombras e semitransparências residuais preservando detalhes finos
+    (grades, furos, malhas) — abordagem por morfologia binária.
 
-    Estratégia (igual ao que o Canva faz internamente):
-    1. Converte para RGBA numpy array.
-    2. Aplica threshold duro no canal alpha:
-       - pixels com alpha < threshold → completamente transparentes (0)
-       - pixels com alpha >= threshold → completamente opacos (255)
-    3. Aplica um leve feather (erosão + suavização) na borda para
-       evitar bordas serrilhadas após o threshold, mantendo suavidade
-       sem as sombras semi-opacas.
+    Pipeline:
+    1. Threshold inicial SUAVE: elimina apenas pixels quase invisíveis (alpha < 30).
+       Um threshold baixo preserva os pixels de borda que formam as grades.
+    2. Erosão binária leve: encolhe a máscara 1px para separar sombras grudadas.
+    3. Dilatação binária: restaura o tamanho original sem reabsorver os buracos
+       que foram abertos pela erosão — é aqui que os furos/grades são preservados.
+    4. Gaussian blur MUITO leve na borda para suavizar serrilhado sem fechar furos.
+    5. Threshold final para reafirmar a máscara limpa.
+
+    Por que isso é melhor que threshold duro + blur (abordagem anterior):
+    - O threshold duro (≥128) cortava pixels de borda válidos das grades.
+    - O GaussianBlur espalhava pixels opacos para dentro dos furos, fechando-os.
+    - A morfologia trabalha com a ESTRUTURA da máscara, não com os valores de alpha,
+      portanto respeita naturalmente os buracos internos do objeto.
     """
-    img = Image.open(io.BytesIO(rgba_bytes)).convert("RGBA")
-    data = np.array(img, dtype=np.float32)
+    img  = Image.open(io.BytesIO(rgba_bytes)).convert("RGBA")
+    data = np.array(img)
+    alpha = data[:, :, 3].astype(np.float32)
 
-    alpha = data[:, :, 3]  # canal alpha
+    # ── 1. Threshold suave: descarta apenas sombras muito transparentes ──────
+    mask = (alpha >= alpha_threshold)          # bool array
 
-    # 1. Threshold duro — elimina semitransparências (sombras, halos)
-    mask = (alpha >= alpha_threshold).astype(np.float32)
+    # ── 2. Erosão leve: separa halos e sombras grudadas na borda ─────────────
+    struct = np.ones((erode_px * 2 + 1, erode_px * 2 + 1), dtype=bool)
+    mask_eroded = binary_erosion(mask, structure=struct)
 
-    # 2. Suavização da borda para não ficar com serrilhado
-    #    Gaussian blur leve apenas na máscara binária
-    if feather > 0:
-        from PIL import ImageFilter
-        mask_img = Image.fromarray((mask * 255).astype(np.uint8), mode='L')
-        mask_img = mask_img.filter(ImageFilter.GaussianBlur(radius=feather))
-        # Aplica threshold novamente após blur para manter bordas limpas
-        mask_blurred = np.array(mask_img, dtype=np.float32) / 255.0
-        # Combina: pixels centrais ficam opacos, borda fica levemente suave
-        final_alpha = np.where(mask > 0.5, mask_blurred * 255, 0).astype(np.uint8)
-    else:
-        final_alpha = (mask * 255).astype(np.uint8)
+    # ── 3. Dilatação: restaura o tamanho mas os furos internos permanecem ────
+    mask_dilated = binary_dilation(mask_eroded, structure=struct)
+
+    # ── 4. Gaussian blur leve para suavizar a borda (sem fechar furos) ───────
+    mask_float = mask_dilated.astype(np.float32)
+    mask_smooth = gaussian_filter(mask_float, sigma=feather_radius)
+
+    # ── 5. Threshold final suave para reafirmar bordas limpas ────────────────
+    final_alpha = np.clip(mask_smooth * 255, 0, 255).astype(np.uint8)
 
     result = img.copy()
     result.putalpha(Image.fromarray(final_alpha, mode='L'))
@@ -93,7 +92,6 @@ def to_white_bg(rgba_bytes):
 
 # ─── Helpers de composição ────────────────────────────────────
 def resize_to_scale(img, canvas_size, escala):
-    """Redimensiona mantendo proporção: lado maior = canvas_size * escala."""
     img  = img.copy()
     w, h = img.size
     if w == 0 or h == 0:
@@ -109,12 +107,6 @@ def paste_rgba(canvas, img, x, y):
         canvas.paste(img, (x, y))
 
 def calc_free_pos(canvas_size, img_w, img_h, pos_x, pos_y):
-    """
-    Calcula (left, top) para que o CENTRO da imagem fique em:
-      cx = canvas/2 + (pos_x/100) * (canvas/2)
-      cy = canvas/2 + (pos_y/100) * (canvas/2)
-    Espelha EXATAMENTE freePositionInPreview() do JS.
-    """
     cx = canvas_size / 2 + (pos_x / 100.0) * (canvas_size / 2)
     cy = canvas_size / 2 + (pos_y / 100.0) * (canvas_size / 2)
     left = int(cx - img_w / 2)
@@ -136,24 +128,14 @@ def make_canvas_produto(produto_img, escala_produto=0.90):
 def make_canvas_com_elemento(produto_img, elemento_img,
                               escala_produto=0.90, escala_elemento=0.40,
                               pos_x=0, pos_y=0):
-    """
-    Produto: centralizado.
-    Elemento secundário: posição livre via pos_x/pos_y (-100..100).
-    Espelha freePositionInPreview() do JS.
-    """
     canvas  = Image.new("RGBA", (CANVAS, CANVAS), (255, 255, 255, 255))
-
-    # Produto centralizado
     produto = resize_to_scale(produto_img.convert("RGBA"), CANVAS, escala_produto)
     px = (CANVAS - produto.width)  // 2
     py = (CANVAS - produto.height) // 2
     paste_rgba(canvas, produto, px, py)
-
-    # Elemento secundário — posição livre
     elem  = resize_to_scale(elemento_img.convert("RGBA"), CANVAS, escala_elemento)
     ex, ey = calc_free_pos(CANVAS, elem.width, elem.height, pos_x, pos_y)
     paste_rgba(canvas, elem, ex, ey)
-
     fundo = Image.new("RGB", (CANVAS, CANVAS), (255, 255, 255))
     fundo.paste(canvas, mask=canvas.split()[3])
     return fundo
@@ -190,7 +172,6 @@ def remove_background():
     escala_caixinha = parse_float_pct(request.form.get("escala_caixinha", "40"),  0.40)
     escala_veiculo  = parse_float_pct(request.form.get("escala_veiculo",  "40"),  0.40)
 
-    # Posição livre: -100..100, 0=centro
     pos_box_x     = parse_int_pos(request.form.get("pos_box_x",     "0"))
     pos_box_y     = parse_int_pos(request.form.get("pos_box_y",     "0"))
     pos_vehicle_x = parse_int_pos(request.form.get("pos_vehicle_x", "0"))
@@ -231,7 +212,7 @@ def remove_background():
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
 
-            # ── Produtos individuais (sem colagem) ──
+            # ── Produtos individuais ──
             for i, (nome_original, _) in enumerate(produtos_bytes):
                 if i in indices_colagem:
                     continue
