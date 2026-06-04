@@ -1,4 +1,4 @@
-from flask import Flask, request, send_file, jsonify
+rom flask import Flask, request, send_file, jsonify
 from flask_cors import CORS
 from rembg import remove, new_session
 from PIL import Image
@@ -38,7 +38,6 @@ def resize_to_scale(img, canvas_size, escala):
     """Redimensiona a imagem para ocupar 'escala' do canvas, mantendo proporção."""
     img = img.copy()
     max_dim = int(canvas_size * escala)
-    # Calcula novo tamanho mantendo proporção
     w, h = img.size
     if w == 0 or h == 0:
         return img
@@ -54,27 +53,39 @@ def paste_rgba(canvas, img, x, y):
         canvas.paste(img, (x, y))
  
 def make_canvas(produto_img, extra_img=None, posicao_extra=None,
-                escala_produto=0.90, escala_extra=0.40):
+                escala_produto=0.90, escala_extra=0.40,
+                offset_x=0, offset_y=0):
+    """
+    Monta canvas 1800×1800.
+    offset_x / offset_y: valor de -100 a 100, onde ±100 equivale a ±20% do canvas (360px).
+    Positivo X → move para a direita; Positivo Y → move para baixo.
+    """
     CANVAS = 1800
     MARGIN = 40
  
     canvas = Image.new("RGBA", (CANVAS, CANVAS), (255, 255, 255, 255))
  
-    # Produto
+    # Produto centrado
     produto = resize_to_scale(produto_img.convert("RGBA"), CANVAS, escala_produto)
     px = (CANVAS - produto.width) // 2
     py = (CANVAS - produto.height) // 2
     paste_rgba(canvas, produto, px, py)
  
-    # Extra (caixinha ou veículo)
+    # Extra (caixinha ou veículo) com offset
     if extra_img is not None:
         extra = resize_to_scale(extra_img.convert("RGBA"), CANVAS, escala_extra)
+ 
+        # Deslocamento: offset ±100 → ±20% do canvas = ±360px
+        delta_x = int((offset_x / 100.0) * CANVAS * 0.20)
+        delta_y = int((offset_y / 100.0) * CANVAS * 0.20)
+ 
         if posicao_extra == "inferior_direito":
-            ex = CANVAS - extra.width - MARGIN
-            ey = CANVAS - extra.height - MARGIN
+            ex = CANVAS - extra.width - MARGIN + delta_x
+            ey = CANVAS - extra.height - MARGIN + delta_y
         else:  # superior_direito
-            ex = CANVAS - extra.width - MARGIN
-            ey = MARGIN
+            ex = CANVAS - extra.width - MARGIN + delta_x
+            ey = MARGIN + delta_y
+ 
         paste_rgba(canvas, extra, ex, ey)
  
     # Achata para RGB com fundo branco
@@ -103,20 +114,49 @@ def remove_background():
     except ValueError:
         idx_veiculo = -1
  
-    # Escalas: frontend envia 30-150, backend converte para 0.30-1.50
+    # Escala do produto (30–150 → 0.30–1.50)
     try:
         escala_produto = float(request.form.get("escala_produto", "90")) / 100.0
         escala_produto = max(0.30, min(1.50, escala_produto))
     except ValueError:
         escala_produto = 0.90
  
+    # Escala da caixinha (separada)
     try:
-        escala_extra = float(request.form.get("escala_extra", "40")) / 100.0
-        escala_extra = max(0.30, min(1.50, escala_extra))
+        escala_caixinha = float(request.form.get("escala_caixinha", "40")) / 100.0
+        escala_caixinha = max(0.30, min(1.50, escala_caixinha))
     except ValueError:
-        escala_extra = 0.40
+        escala_caixinha = 0.40
  
-    print(f"[DEBUG] escala_produto={escala_produto:.2f} escala_extra={escala_extra:.2f}")
+    # Escala do veículo (separada)
+    try:
+        escala_veiculo = float(request.form.get("escala_veiculo", "40")) / 100.0
+        escala_veiculo = max(0.30, min(1.50, escala_veiculo))
+    except ValueError:
+        escala_veiculo = 0.40
+ 
+    # Offsets de posição (-100 a 100)
+    try:
+        offset_box_x = max(-100, min(100, int(request.form.get("offset_box_x", "0"))))
+    except ValueError:
+        offset_box_x = 0
+    try:
+        offset_box_y = max(-100, min(100, int(request.form.get("offset_box_y", "0"))))
+    except ValueError:
+        offset_box_y = 0
+    try:
+        offset_vehicle_x = max(-100, min(100, int(request.form.get("offset_vehicle_x", "0"))))
+    except ValueError:
+        offset_vehicle_x = 0
+    try:
+        offset_vehicle_y = max(-100, min(100, int(request.form.get("offset_vehicle_y", "0"))))
+    except ValueError:
+        offset_vehicle_y = 0
+ 
+    print(f"[DEBUG] escala_produto={escala_produto:.2f} "
+          f"escala_caixinha={escala_caixinha:.2f} escala_veiculo={escala_veiculo:.2f} "
+          f"offset_box=({offset_box_x},{offset_box_y}) "
+          f"offset_vehicle=({offset_vehicle_x},{offset_vehicle_y})")
  
     produtos_files = request.files.getlist("produtos")
     if not produtos_files:
@@ -168,8 +208,13 @@ def remove_background():
                 prod_rgba = Image.open(io.BytesIO(produtos_sem_fundo[idx_caixinha])).convert("RGBA")
                 caixa_img = Image.open(io.BytesIO(caixinha_sem_fundo)).convert("RGBA")
                 prod_entrada = to_white_bg(produtos_sem_fundo[idx_caixinha]) if fundo_branco else prod_rgba
-                canvas = make_canvas(prod_entrada, caixa_img, "inferior_direito",
-                                     escala_produto=escala_produto, escala_extra=escala_extra)
+                canvas = make_canvas(
+                    prod_entrada, caixa_img, "inferior_direito",
+                    escala_produto=escala_produto,
+                    escala_extra=escala_caixinha,
+                    offset_x=offset_box_x,
+                    offset_y=offset_box_y
+                )
                 buf = io.BytesIO()
                 canvas.save(buf, format="PNG")
                 nome_base = os.path.splitext(produtos_bytes[idx_caixinha][0])[0]
@@ -180,8 +225,13 @@ def remove_background():
                 prod_rgba   = Image.open(io.BytesIO(produtos_sem_fundo[idx_veiculo])).convert("RGBA")
                 veiculo_img = Image.open(io.BytesIO(veiculo_sem_fundo)).convert("RGBA")
                 prod_entrada = to_white_bg(produtos_sem_fundo[idx_veiculo]) if fundo_branco else prod_rgba
-                canvas = make_canvas(prod_entrada, veiculo_img, "superior_direito",
-                                     escala_produto=escala_produto, escala_extra=escala_extra)
+                canvas = make_canvas(
+                    prod_entrada, veiculo_img, "superior_direito",
+                    escala_produto=escala_produto,
+                    escala_extra=escala_veiculo,
+                    offset_x=offset_vehicle_x,
+                    offset_y=offset_vehicle_y
+                )
                 buf = io.BytesIO()
                 canvas.save(buf, format="PNG")
                 nome_base = os.path.splitext(produtos_bytes[idx_veiculo][0])[0]
