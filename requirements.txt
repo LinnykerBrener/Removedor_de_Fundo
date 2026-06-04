@@ -1,4 +1,6 @@
 flask
 flask-cors
-rembg[cpu]
+rembg[gpu]
 pillow
+numpy
+scipy
