@@ -2,216 +2,235 @@ from flask import Flask, request, send_file, jsonify
 from flask_cors import CORS
 from rembg import remove, new_session
 from PIL import Image
+import numpy as np
 import io
 import os
 import zipfile
- 
+
 os.environ["ONNXRUNTIME_PROVIDERS"] = "CPUExecutionProvider"
- 
+
 app = Flask(__name__, static_folder=".", static_url_path="")
 CORS(app)
- 
+
 print("Carregando modelo de IA... aguarde.")
 session = new_session("u2net")
 print("Modelo carregado! Servidor pronto.")
- 
+
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "bmp"}
- 
+
 # ─── Constantes de composição ─────────────────────────────────
-# ATENÇÃO: devem espelhar EXATAMENTE as constantes no index.html (JS)
-#   CANVAS_PY   = 1800
-#   MARGIN_PY   = 40
-#   OFFSET_FRAC = 0.20   (fração do CANVAS usada por ±100 de offset)
-CANVAS      = 1800
-MARGIN      = 40
-OFFSET_FRAC = 0.20
- 
+# DEVEM espelhar EXATAMENTE as constantes do index.html (JS)
+#
+# Sistema de posição LIVRE:
+#   pos_x, pos_y ∈ [-100, 100]
+#   0, 0 = centro do canvas
+#   O CENTRO da imagem secundária fica em:
+#     cx = CANVAS/2 + (pos_x/100) * (CANVAS/2)
+#     cy = CANVAS/2 + (pos_y/100) * (CANVAS/2)
+#   Portanto ±100 leva o centro até a borda do canvas.
+CANVAS = 1800
+
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
- 
-# ─── Remoção de fundo ─────────────────────────────────────────
+
+# ─── Remoção de fundo + limpeza de sombra ────────────────────
 def remove_bg(image_bytes):
+    """Remove o fundo com rembg e depois aplica limpeza de sombra/semitransparência."""
     image = Image.open(io.BytesIO(image_bytes))
     if max(image.size) > 1200:
         image.thumbnail((1200, 1200), Image.LANCZOS)
     buf = io.BytesIO()
     image.save(buf, format="PNG")
-    return remove(buf.getvalue(), session=session)
- 
+    raw = remove(buf.getvalue(), session=session)
+    return clean_shadow(raw)
+
+def clean_shadow(rgba_bytes, alpha_threshold=128, feather=2):
+    """
+    Remove sombras e semitransparências residuais deixadas pelo rembg.
+
+    Estratégia (igual ao que o Canva faz internamente):
+    1. Converte para RGBA numpy array.
+    2. Aplica threshold duro no canal alpha:
+       - pixels com alpha < threshold → completamente transparentes (0)
+       - pixels com alpha >= threshold → completamente opacos (255)
+    3. Aplica um leve feather (erosão + suavização) na borda para
+       evitar bordas serrilhadas após o threshold, mantendo suavidade
+       sem as sombras semi-opacas.
+    """
+    img = Image.open(io.BytesIO(rgba_bytes)).convert("RGBA")
+    data = np.array(img, dtype=np.float32)
+
+    alpha = data[:, :, 3]  # canal alpha
+
+    # 1. Threshold duro — elimina semitransparências (sombras, halos)
+    mask = (alpha >= alpha_threshold).astype(np.float32)
+
+    # 2. Suavização da borda para não ficar com serrilhado
+    #    Gaussian blur leve apenas na máscara binária
+    if feather > 0:
+        from PIL import ImageFilter
+        mask_img = Image.fromarray((mask * 255).astype(np.uint8), mode='L')
+        mask_img = mask_img.filter(ImageFilter.GaussianBlur(radius=feather))
+        # Aplica threshold novamente após blur para manter bordas limpas
+        mask_blurred = np.array(mask_img, dtype=np.float32) / 255.0
+        # Combina: pixels centrais ficam opacos, borda fica levemente suave
+        final_alpha = np.where(mask > 0.5, mask_blurred * 255, 0).astype(np.uint8)
+    else:
+        final_alpha = (mask * 255).astype(np.uint8)
+
+    result = img.copy()
+    result.putalpha(Image.fromarray(final_alpha, mode='L'))
+
+    buf = io.BytesIO()
+    result.save(buf, format="PNG")
+    return buf.getvalue()
+
 def to_white_bg(rgba_bytes):
     img   = Image.open(io.BytesIO(rgba_bytes)).convert("RGBA")
     fundo = Image.new("RGBA", img.size, (255, 255, 255, 255))
     fundo.paste(img, mask=img.split()[3])
     return fundo.convert("RGBA")
- 
+
 # ─── Helpers de composição ────────────────────────────────────
 def resize_to_scale(img, canvas_size, escala):
-    """
-    Redimensiona mantendo proporção para que o lado maior ocupe
-    (canvas_size * escala) pixels.
-    Igual ao JS: previewDim(scalePct) = PREV * (scalePct/100)
-    para o caso quadrado; aqui preservamos a proporção real.
-    """
-    img   = img.copy()
-    w, h  = img.size
+    """Redimensiona mantendo proporção: lado maior = canvas_size * escala."""
+    img  = img.copy()
+    w, h = img.size
     if w == 0 or h == 0:
         return img
     max_dim = int(canvas_size * escala)
     ratio   = min(max_dim / w, max_dim / h)
     return img.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
- 
+
 def paste_rgba(canvas, img, x, y):
     if img.mode == "RGBA":
         canvas.paste(img, (x, y), img.split()[3])
     else:
         canvas.paste(img, (x, y))
- 
+
+def calc_free_pos(canvas_size, img_w, img_h, pos_x, pos_y):
+    """
+    Calcula (left, top) para que o CENTRO da imagem fique em:
+      cx = canvas/2 + (pos_x/100) * (canvas/2)
+      cy = canvas/2 + (pos_y/100) * (canvas/2)
+    Espelha EXATAMENTE freePositionInPreview() do JS.
+    """
+    cx = canvas_size / 2 + (pos_x / 100.0) * (canvas_size / 2)
+    cy = canvas_size / 2 + (pos_y / 100.0) * (canvas_size / 2)
+    left = int(cx - img_w / 2)
+    top  = int(cy - img_h / 2)
+    return left, top
+
 # ─── Canvas: produto isolado ──────────────────────────────────
 def make_canvas_produto(produto_img, escala_produto=0.90):
     canvas  = Image.new("RGBA", (CANVAS, CANVAS), (255, 255, 255, 255))
     produto = resize_to_scale(produto_img.convert("RGBA"), CANVAS, escala_produto)
-    # Centralizado — igual ao JS: centerInPreview
     px = (CANVAS - produto.width)  // 2
     py = (CANVAS - produto.height) // 2
     paste_rgba(canvas, produto, px, py)
     fundo = Image.new("RGB", (CANVAS, CANVAS), (255, 255, 255))
     fundo.paste(canvas, mask=canvas.split()[3])
     return fundo
- 
-# ─── Canvas: produto + caixinha (inferior direito) ────────────
-def make_canvas_com_caixinha(produto_img, caixinha_img,
-                              escala_produto=0.90, escala_caixinha=0.40,
-                              offset_x=0, offset_y=0):
+
+# ─── Canvas: produto + elemento secundário ───────────────────
+def make_canvas_com_elemento(produto_img, elemento_img,
+                              escala_produto=0.90, escala_elemento=0.40,
+                              pos_x=0, pos_y=0):
     """
-    Espelha EXATAMENTE bottomRightInPreview() do JS:
-      delta_x = (offset_x / 100) * CANVAS * OFFSET_FRAC
-      delta_y = (offset_y / 100) * CANVAS * OFFSET_FRAC
-      cx = CANVAS - w - MARGIN + delta_x
-      cy = CANVAS - h - MARGIN + delta_y
+    Produto: centralizado.
+    Elemento secundário: posição livre via pos_x/pos_y (-100..100).
+    Espelha freePositionInPreview() do JS.
     """
     canvas  = Image.new("RGBA", (CANVAS, CANVAS), (255, 255, 255, 255))
- 
+
     # Produto centralizado
     produto = resize_to_scale(produto_img.convert("RGBA"), CANVAS, escala_produto)
     px = (CANVAS - produto.width)  // 2
     py = (CANVAS - produto.height) // 2
     paste_rgba(canvas, produto, px, py)
- 
-    # Caixinha — canto inferior direito + offset
-    caixa   = resize_to_scale(caixinha_img.convert("RGBA"), CANVAS, escala_caixinha)
-    delta_x = int((offset_x / 100.0) * CANVAS * OFFSET_FRAC)
-    delta_y = int((offset_y / 100.0) * CANVAS * OFFSET_FRAC)
-    cx = CANVAS - caixa.width  - MARGIN + delta_x
-    cy = CANVAS - caixa.height - MARGIN + delta_y
-    paste_rgba(canvas, caixa, cx, cy)
- 
+
+    # Elemento secundário — posição livre
+    elem  = resize_to_scale(elemento_img.convert("RGBA"), CANVAS, escala_elemento)
+    ex, ey = calc_free_pos(CANVAS, elem.width, elem.height, pos_x, pos_y)
+    paste_rgba(canvas, elem, ex, ey)
+
     fundo = Image.new("RGB", (CANVAS, CANVAS), (255, 255, 255))
     fundo.paste(canvas, mask=canvas.split()[3])
     return fundo
- 
-# ─── Canvas: produto + veículo (superior direito) ────────────
-def make_canvas_com_veiculo(produto_img, veiculo_img,
-                             escala_produto=0.90, escala_veiculo=0.40,
-                             offset_x=0, offset_y=0):
-    """
-    Espelha EXATAMENTE topRightInPreview() do JS:
-      delta_x = (offset_x / 100) * CANVAS * OFFSET_FRAC
-      delta_y = (offset_y / 100) * CANVAS * OFFSET_FRAC
-      vx = CANVAS - w - MARGIN + delta_x
-      vy = MARGIN + delta_y
-    """
-    canvas  = Image.new("RGBA", (CANVAS, CANVAS), (255, 255, 255, 255))
- 
-    # Produto centralizado
-    produto = resize_to_scale(produto_img.convert("RGBA"), CANVAS, escala_produto)
-    px = (CANVAS - produto.width)  // 2
-    py = (CANVAS - produto.height) // 2
-    paste_rgba(canvas, produto, px, py)
- 
-    # Veículo — canto superior direito + offset
-    veiculo = resize_to_scale(veiculo_img.convert("RGBA"), CANVAS, escala_veiculo)
-    delta_x = int((offset_x / 100.0) * CANVAS * OFFSET_FRAC)
-    delta_y = int((offset_y / 100.0) * CANVAS * OFFSET_FRAC)
-    vx = CANVAS - veiculo.width  - MARGIN + delta_x
-    vy = MARGIN + delta_y
-    paste_rgba(canvas, veiculo, vx, vy)
- 
-    fundo = Image.new("RGB", (CANVAS, CANVAS), (255, 255, 255))
-    fundo.paste(canvas, mask=canvas.split()[3])
-    return fundo
- 
+
 # ─── Helpers de parse ─────────────────────────────────────────
-def parse_float_pct(val, default, lo=0.10, hi=0.90):
+def parse_float_pct(val, default, lo=0.10, hi=1.50):
     try:
         v = float(val) / 100.0
         return max(lo, min(hi, v))
     except (TypeError, ValueError):
         return default
- 
-def parse_int_offset(val, default=0, lo=-100, hi=100):
+
+def parse_int_pos(val, default=0, lo=-100, hi=100):
     try:
         return max(lo, min(hi, int(val)))
     except (TypeError, ValueError):
         return default
- 
+
 # ─── Rotas ────────────────────────────────────────────────────
 @app.route("/")
 def index():
     return app.send_static_file("index.html")
- 
+
 @app.route("/remove-bg", methods=["POST"])
 def remove_background():
     fundo_branco  = request.form.get("fundo_branco",  "false").lower() == "true"
     usar_caixinha = request.form.get("usar_caixinha", "false").lower() == "true"
     usar_veiculo  = request.form.get("usar_veiculo",  "false").lower() == "true"
- 
-    idx_caixinha = parse_int_offset(request.form.get("idx_caixinha", "-1"), -1, -1, 9999)
-    idx_veiculo  = parse_int_offset(request.form.get("idx_veiculo",  "-1"), -1, -1, 9999)
- 
+
+    idx_caixinha = parse_int_pos(request.form.get("idx_caixinha", "-1"), -1, -1, 9999)
+    idx_veiculo  = parse_int_pos(request.form.get("idx_veiculo",  "-1"), -1, -1, 9999)
+
     escala_produto  = parse_float_pct(request.form.get("escala_produto",  "90"),  0.90)
     escala_caixinha = parse_float_pct(request.form.get("escala_caixinha", "40"),  0.40)
     escala_veiculo  = parse_float_pct(request.form.get("escala_veiculo",  "40"),  0.40)
- 
-    offset_box_x     = parse_int_offset(request.form.get("offset_box_x",     "0"))
-    offset_box_y     = parse_int_offset(request.form.get("offset_box_y",     "0"))
-    offset_vehicle_x = parse_int_offset(request.form.get("offset_vehicle_x", "0"))
-    offset_vehicle_y = parse_int_offset(request.form.get("offset_vehicle_y", "0"))
- 
+
+    # Posição livre: -100..100, 0=centro
+    pos_box_x     = parse_int_pos(request.form.get("pos_box_x",     "0"))
+    pos_box_y     = parse_int_pos(request.form.get("pos_box_y",     "0"))
+    pos_vehicle_x = parse_int_pos(request.form.get("pos_vehicle_x", "0"))
+    pos_vehicle_y = parse_int_pos(request.form.get("pos_vehicle_y", "0"))
+
     print(f"[DEBUG] prod={escala_produto:.2f} "
-          f"caixa={escala_caixinha:.2f} off=({offset_box_x},{offset_box_y}) "
-          f"veiculo={escala_veiculo:.2f} off=({offset_vehicle_x},{offset_vehicle_y})")
- 
+          f"caixa={escala_caixinha:.2f} pos=({pos_box_x},{pos_box_y}) "
+          f"veiculo={escala_veiculo:.2f} pos=({pos_vehicle_x},{pos_vehicle_y})")
+
     produtos_files = request.files.getlist("produtos")
     if not produtos_files:
         return jsonify({"error": "Nenhuma imagem enviada."}), 400
- 
+
     produtos_bytes = []
     for f in produtos_files:
         if not allowed_file(f.filename):
             return jsonify({"error": f"Formato não suportado: {f.filename}"}), 400
         produtos_bytes.append((f.filename, f.read()))
- 
+
     caixinha_bytes = None
     veiculo_bytes  = None
     if usar_caixinha and "caixinha" in request.files:
         caixinha_bytes = request.files["caixinha"].read()
     if usar_veiculo and "veiculo" in request.files:
         veiculo_bytes = request.files["veiculo"].read()
- 
+
     try:
         produtos_sem_fundo = [remove_bg(b) for _, b in produtos_bytes]
         caixinha_sem_fundo = remove_bg(caixinha_bytes) if caixinha_bytes else None
         veiculo_sem_fundo  = remove_bg(veiculo_bytes)  if veiculo_bytes  else None
- 
+
         indices_colagem = set()
         if usar_caixinha and caixinha_sem_fundo and 0 <= idx_caixinha < len(produtos_sem_fundo):
             indices_colagem.add(idx_caixinha)
         if usar_veiculo and veiculo_sem_fundo and 0 <= idx_veiculo < len(produtos_sem_fundo):
             indices_colagem.add(idx_veiculo)
- 
+
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
- 
+
             # ── Produtos individuais (sem colagem) ──
             for i, (nome_original, _) in enumerate(produtos_bytes):
                 if i in indices_colagem:
@@ -223,51 +242,53 @@ def remove_background():
                 buf = io.BytesIO()
                 canvas_img.save(buf, format="PNG")
                 zf.writestr(os.path.splitext(nome_original)[0] + ".png", buf.getvalue())
- 
+
             # ── Colagem caixinha ──
             if usar_caixinha and caixinha_sem_fundo and 0 <= idx_caixinha < len(produtos_sem_fundo):
                 prod_img  = Image.open(io.BytesIO(produtos_sem_fundo[idx_caixinha])).convert("RGBA")
                 caixa_img = Image.open(io.BytesIO(caixinha_sem_fundo)).convert("RGBA")
                 if fundo_branco:
                     prod_img = to_white_bg(produtos_sem_fundo[idx_caixinha])
-                canvas_img = make_canvas_com_caixinha(
+                canvas_img = make_canvas_com_elemento(
                     prod_img, caixa_img,
                     escala_produto=escala_produto,
-                    escala_caixinha=escala_caixinha,
-                    offset_x=offset_box_x,
-                    offset_y=offset_box_y
+                    escala_elemento=escala_caixinha,
+                    pos_x=pos_box_x,
+                    pos_y=pos_box_y
                 )
                 buf = io.BytesIO()
                 canvas_img.save(buf, format="PNG")
                 nome_base = os.path.splitext(produtos_bytes[idx_caixinha][0])[0]
                 zf.writestr(f"{nome_base}_com_caixinha.png", buf.getvalue())
- 
+
             # ── Colagem veículo ──
             if usar_veiculo and veiculo_sem_fundo and 0 <= idx_veiculo < len(produtos_sem_fundo):
                 prod_img    = Image.open(io.BytesIO(produtos_sem_fundo[idx_veiculo])).convert("RGBA")
                 veiculo_img = Image.open(io.BytesIO(veiculo_sem_fundo)).convert("RGBA")
                 if fundo_branco:
                     prod_img = to_white_bg(produtos_sem_fundo[idx_veiculo])
-                canvas_img = make_canvas_com_veiculo(
+                canvas_img = make_canvas_com_elemento(
                     prod_img, veiculo_img,
                     escala_produto=escala_produto,
-                    escala_veiculo=escala_veiculo,
-                    offset_x=offset_vehicle_x,
-                    offset_y=offset_vehicle_y
+                    escala_elemento=escala_veiculo,
+                    pos_x=pos_vehicle_x,
+                    pos_y=pos_vehicle_y
                 )
                 buf = io.BytesIO()
                 canvas_img.save(buf, format="PNG")
                 nome_base = os.path.splitext(produtos_bytes[idx_veiculo][0])[0]
                 zf.writestr(f"{nome_base}_com_veiculo.png", buf.getvalue())
- 
+
         zip_buffer.seek(0)
         return send_file(zip_buffer, mimetype="application/zip",
                          download_name="imagens_processadas.zip")
- 
+
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
- 
- 
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(debug=False, host="0.0.0.0", port=port)
