@@ -78,7 +78,6 @@
     }
     .product-item img {
       width: 100%; height: 120px; object-fit: cover; display: block;
-      background: repeating-conic-gradient(#1a1a2e 0% 25%, #111118 0% 50%) 0 0/16px 16px;
     }
     .product-item .item-name {
       padding: 0.4rem 0.6rem; font-size: 0.72rem; color: var(--muted);
@@ -89,6 +88,38 @@
       background: rgba(248,113,113,0.9); border: none; border-radius: 50%;
       width: 22px; height: 22px; cursor: pointer; color: white;
       font-size: 12px; display: flex; align-items: center; justify-content: center;
+    }
+
+    .scale-row {
+      display: flex; align-items: center; gap: 1rem; margin-top: 1rem;
+    }
+    .scale-row label { font-size: 0.82rem; color: var(--muted); white-space: nowrap; }
+    .scale-row input[type=range] {
+      flex: 1; accent-color: var(--accent); height: 4px; cursor: pointer;
+    }
+    .scale-value {
+      font-size: 0.82rem; font-weight: 600; color: var(--accent);
+      min-width: 36px; text-align: right;
+    }
+
+    .preview-wrap {
+      margin-top: 1rem; display: none; flex-direction: column; gap: 0.5rem;
+    }
+    .preview-wrap.visible { display: flex; }
+    .preview-label { font-size: 0.75rem; color: var(--muted); }
+    .preview-box {
+      width: 100%; max-width: 300px; aspect-ratio: 1;
+      background: repeating-conic-gradient(#1a1a2e 0% 25%, #111118 0% 50%) 0 0/16px 16px;
+      border-radius: 12px; border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden; position: relative;
+    }
+    .preview-box.white-bg { background: #ffffff; }
+    .preview-box img {
+      position: absolute;
+      max-width: 100%; max-height: 100%;
+      object-fit: contain;
+      transition: width 0.15s, height 0.15s;
     }
 
     .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
@@ -161,14 +192,37 @@
 
     .result-card { display: none; }
     .result-card.visible { display: block; }
-    .btn-download {
+    .result-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 1rem; margin-top: 0.5rem;
+    }
+    .result-item {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 12px; overflow: hidden; text-align: center;
+    }
+    .result-item img {
+      width: 100%; height: 160px; object-fit: contain;
+      background: repeating-conic-gradient(#1a1a2e 0% 25%, #111118 0% 50%) 0 0/16px 16px;
+      display: block;
+    }
+    .result-item.white-bg img { background: #ffffff; }
+    .btn-dl-individual {
+      display: block; width: 100%; padding: 0.6rem;
+      border: none; border-top: 1px solid var(--border);
+      background: transparent; color: var(--accent);
+      font-family: 'DM Sans', sans-serif; font-size: 0.8rem;
+      cursor: pointer; transition: background 0.2s;
+    }
+    .btn-dl-individual:hover { background: rgba(110,231,183,0.08); }
+
+    .btn-download-all {
       display: flex; align-items: center; justify-content: center; gap: 0.5rem;
       width: 100%; padding: 0.85rem; border-radius: 12px; border: 1px solid var(--accent);
       background: transparent; color: var(--accent);
       font-family: 'DM Sans', sans-serif; font-size: 0.9rem; font-weight: 500;
-      cursor: pointer; transition: background 0.2s;
+      cursor: pointer; transition: background 0.2s; margin-top: 1rem;
     }
-    .btn-download:hover { background: rgba(110,231,183,0.08); }
+    .btn-download-all:hover { background: rgba(110,231,183,0.08); }
   </style>
 </head>
 <body>
@@ -193,6 +247,19 @@
       <input type="file" id="input-products" multiple accept="image/*" style="display:none"/>
     </div>
     <div class="products-grid" id="products-grid"></div>
+
+    <div class="scale-row" id="scale-row" style="display:none">
+      <label>Tamanho da peça</label>
+      <input type="range" id="scale-slider" min="30" max="100" value="90"/>
+      <span class="scale-value" id="scale-value">90%</span>
+    </div>
+
+    <div class="preview-wrap" id="preview-wrap">
+      <div class="preview-label">Pré-visualização (primeira peça):</div>
+      <div class="preview-box" id="preview-box">
+        <img id="preview-img" src="" alt="preview"/>
+      </div>
+    </div>
   </div>
 
   <div class="card">
@@ -275,13 +342,10 @@
   </div>
 
   <div class="card result-card" id="result-card">
-    <div class="card-title">✅ Resultado</div>
-    <button class="btn-download" id="btn-download">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-        <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-      </svg>
-      Baixar todas as imagens (.zip)
+    <div class="card-title">✅ Resultado — clique em cada imagem para baixar</div>
+    <div class="result-grid" id="result-grid"></div>
+    <button class="btn-download-all" id="btn-download-all">
+      ⬇️ Baixar todas de uma vez
     </button>
   </div>
 
@@ -291,11 +355,17 @@
   const productFiles = [];
   let boxFile = null;
   let vehicleFile = null;
-  let resultBlob = null;
+  let resultFiles = [];
 
   const dropProducts = document.getElementById('drop-products');
   const inputProducts = document.getElementById('input-products');
   const productsGrid = document.getElementById('products-grid');
+  const scaleRow = document.getElementById('scale-row');
+  const scaleSlider = document.getElementById('scale-slider');
+  const scaleValueEl = document.getElementById('scale-value');
+  const previewWrap = document.getElementById('preview-wrap');
+  const previewBox = document.getElementById('preview-box');
+  const previewImg = document.getElementById('preview-img');
 
   dropProducts.addEventListener('click', () => inputProducts.click());
   dropProducts.addEventListener('dragover', e => { e.preventDefault(); dropProducts.classList.add('drag-over'); });
@@ -318,13 +388,43 @@
       const btn = document.createElement('button');
       btn.className = 'remove-btn';
       btn.innerHTML = '×';
-      btn.onclick = () => { productFiles.splice(idx, 1); div.remove(); updateSelects(); checkReady(); };
+      btn.onclick = () => { productFiles.splice(idx, 1); div.remove(); updateSelects(); checkReady(); updatePreview(); };
       div.appendChild(img); div.appendChild(name); div.appendChild(btn);
       productsGrid.appendChild(div);
     });
     updateSelects();
     checkReady();
+    updatePreview();
+    if (productFiles.length > 0) {
+      scaleRow.style.display = 'flex';
+      previewWrap.classList.add('visible');
+    }
   }
+
+  function updatePreview() {
+    if (productFiles.length === 0) {
+      previewWrap.classList.remove('visible');
+      scaleRow.style.display = 'none';
+      return;
+    }
+    const scale = parseInt(scaleSlider.value) / 100;
+    previewImg.src = URL.createObjectURL(productFiles[0]);
+    previewImg.style.width = (scale * 100) + '%';
+    previewImg.style.height = (scale * 100) + '%';
+    previewImg.style.objectFit = 'contain';
+    if (document.getElementById('toggle-branco').checked) {
+      previewBox.classList.add('white-bg');
+    } else {
+      previewBox.classList.remove('white-bg');
+    }
+  }
+
+  scaleSlider.addEventListener('input', () => {
+    scaleValueEl.textContent = scaleSlider.value + '%';
+    updatePreview();
+  });
+
+  document.getElementById('toggle-branco').addEventListener('change', updatePreview);
 
   function updateSelects() {
     ['select-box-product', 'select-vehicle-product'].forEach(id => {
@@ -383,14 +483,17 @@
     progressBar.style.width = '10%';
     setStatus('Enviando imagens...');
     document.getElementById('result-card').classList.remove('visible');
+    document.getElementById('result-grid').innerHTML = '';
+    resultFiles = [];
 
     const useBox = document.getElementById('toggle-box').checked;
     const useVehicle = document.getElementById('toggle-vehicle').checked;
+    const fundoBranco = document.getElementById('toggle-branco').checked;
 
     const formData = new FormData();
-
     productFiles.forEach(f => formData.append('produtos', f));
-    formData.append('fundo_branco', document.getElementById('toggle-branco').checked ? 'true' : 'false');
+    formData.append('fundo_branco', fundoBranco ? 'true' : 'false');
+    formData.append('escala_produto', scaleSlider.value);
 
     formData.append('usar_caixinha', useBox ? 'true' : 'false');
     if (useBox && boxFile) {
@@ -409,7 +512,6 @@
       setStatus(`Processando ${productFiles.length} imagem(ns)... pode demorar alguns segundos.`);
 
       const response = await fetch('/remove-bg', { method: 'POST', body: formData });
-
       progressBar.style.width = '90%';
 
       if (!response.ok) {
@@ -417,11 +519,32 @@
         throw new Error(err.error || 'Erro desconhecido.');
       }
 
-      resultBlob = await response.blob();
+      const zipBlob = await response.blob();
+      const arrayBuffer = await zipBlob.arrayBuffer();
+      const entries = await unzipAll(arrayBuffer);
+
       progressBar.style.width = '100%';
       setTimeout(() => { progressWrap.style.display = 'none'; progressBar.style.width = '0%'; }, 600);
 
-      setStatus(`✓ ${productFiles.length} imagem(ns) processada(s) com sucesso!`, 'success');
+      const grid = document.getElementById('result-grid');
+      entries.forEach(({ name, blob }) => {
+        resultFiles.push({ name, blob });
+        const url = URL.createObjectURL(blob);
+        const item = document.createElement('div');
+        item.className = 'result-item' + (fundoBranco ? ' white-bg' : '');
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = name;
+        const btnDl = document.createElement('button');
+        btnDl.className = 'btn-dl-individual';
+        btnDl.textContent = '⬇️ ' + name;
+        btnDl.onclick = () => downloadBlob(blob, name);
+        item.appendChild(img);
+        item.appendChild(btnDl);
+        grid.appendChild(item);
+      });
+
+      setStatus(`✓ ${entries.length} imagem(ns) prontas!`, 'success');
       document.getElementById('result-card').classList.add('visible');
 
     } catch (err) {
@@ -432,13 +555,70 @@
     }
   });
 
-  document.getElementById('btn-download').addEventListener('click', () => {
-    if (!resultBlob) return;
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(resultBlob);
-    a.download = 'imagens_processadas.zip';
-    a.click();
+  document.getElementById('btn-download-all').addEventListener('click', () => {
+    resultFiles.forEach(({ name, blob }) => downloadBlob(blob, name));
   });
+
+  function downloadBlob(blob, name) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+  }
+
+  async function unzipAll(arrayBuffer) {
+    const view = new DataView(arrayBuffer);
+    const results = [];
+    let eocdOffset = -1;
+    for (let i = arrayBuffer.byteLength - 22; i >= 0; i--) {
+      if (view.getUint32(i, true) === 0x06054b50) { eocdOffset = i; break; }
+    }
+    if (eocdOffset === -1) throw new Error('ZIP inválido');
+    const centralDirOffset = view.getUint32(eocdOffset + 16, true);
+    const totalEntries = view.getUint16(eocdOffset + 10, true);
+    let offset = centralDirOffset;
+    for (let i = 0; i < totalEntries; i++) {
+      if (view.getUint32(offset, true) !== 0x02014b50) break;
+      const compMethod = view.getUint16(offset + 10, true);
+      const compSize = view.getUint32(offset + 20, true);
+      const fnLen = view.getUint16(offset + 28, true);
+      const extraLen = view.getUint16(offset + 30, true);
+      const commentLen = view.getUint16(offset + 32, true);
+      const localHeaderOffset = view.getUint32(offset + 42, true);
+      const name = new TextDecoder().decode(new Uint8Array(arrayBuffer, offset + 46, fnLen));
+      offset += 46 + fnLen + extraLen + commentLen;
+      const lhExtraLen = view.getUint16(localHeaderOffset + 28, true);
+      const dataOffset = localHeaderOffset + 30 + fnLen + lhExtraLen;
+      const compData = new Uint8Array(arrayBuffer, dataOffset, compSize);
+      let fileData;
+      if (compMethod === 0) {
+        fileData = compData;
+      } else if (compMethod === 8) {
+        const ds = new DecompressionStream('deflate-raw');
+        const writer = ds.writable.getWriter();
+        writer.write(compData);
+        writer.close();
+        const chunks = [];
+        const reader = ds.readable.getReader();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+        }
+        const total = chunks.reduce((s, c) => s + c.length, 0);
+        fileData = new Uint8Array(total);
+        let pos = 0;
+        chunks.forEach(c => { fileData.set(c, pos); pos += c.length; });
+      } else {
+        continue;
+      }
+      if (!name.endsWith('/')) {
+        const blob = new Blob([fileData], { type: 'image/png' });
+        results.push({ name, blob });
+      }
+    }
+    return results;
+  }
 </script>
 </body>
 </html>
