@@ -1,9 +1,9 @@
 from flask import Flask, request, send_file, jsonify
 from flask_cors import CORS
 from rembg import remove, new_session
-from PIL import Image, ImageFilter
+from PIL import Image
 import numpy as np
-import cv2
+from scipy.ndimage import binary_fill_holes, gaussian_filter
 import io
 import os
 import zipfile
@@ -14,7 +14,7 @@ app = Flask(__name__, static_folder=".", static_url_path="")
 CORS(app)
 
 print("Carregando modelo de IA... aguarde.")
-session = new_session("isnet-general-use")   # ← modelo superior ao u2net para bordas
+session = new_session("isnet-general-use")
 print("Modelo carregado! Servidor pronto.")
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "bmp"}
@@ -34,57 +34,35 @@ def remove_bg(image_bytes):
     buf = io.BytesIO()
     image.save(buf, format="PNG")
     raw = remove(buf.getvalue(), session=session)
-    cleaned = remove_internal_holes(raw)   # ← abre os furos/grades internos
-    return refine_edges(cleaned)           # ← suaviza bordas sem fechá-los
+    cleaned = remove_internal_holes(raw)
+    return refine_edges(cleaned)
 
 
 def remove_internal_holes(rgba_bytes):
     """
-    Detecta e remove ilhas de fundo presas DENTRO do objeto (furos, grades, malhas).
+    Remove ilhas de fundo presas DENTRO do objeto (furos, grades, malhas).
 
-    O rembg remove o fundo externo mas deixa os "buracos internos" opacos porque
-    o modelo os classifica como parte do objeto.
-
-    Estratégia — flood fill a partir das bordas:
-    1. Binariza o alpha (opaco / transparente).
-    2. Inverte: fundo=255, objeto=0.
-    3. Flood fill a partir do pixel (0,0) → pinta de cinza (128) SOMENTE
-       o fundo que toca as bordas (= fundo externo já removido pelo rembg).
-    4. Pixels que ainda são 255 depois do flood = furos INTERNOS (não
-       conectados à borda) → tornamos transparentes.
-    5. Erosão leve para limpar ruído de borda sem destruir detalhes finos.
+    O rembg remove o fundo externo mas deixa os buracos internos opacos.
+    scipy.ndimage.binary_fill_holes detecta e preenche esses buracos na
+    máscara — a diferença entre a máscara preenchida e a original revela
+    exatamente quais pixels são furos internos.
     """
     img   = Image.open(io.BytesIO(rgba_bytes)).convert("RGBA")
     data  = np.array(img)
     alpha = data[:, :, 3]
 
-    # ── 1. Binariza ──────────────────────────────────────────
-    binary   = (alpha > 30).astype(np.uint8) * 255   # objeto=255, fundo=0
-    inverted = cv2.bitwise_not(binary)                # objeto=0,   fundo=255
+    # Máscara binária: True = objeto
+    binary = alpha > 30
 
-    # ── 2. Flood fill pelo fundo externo (começa no canto) ───
-    h, w      = inverted.shape
-    flood_img = inverted.copy()
-    flood_mask = np.zeros((h + 2, w + 2), dtype=np.uint8)
-    cv2.floodFill(flood_img, flood_mask, (0, 0), 128)
+    # Preenche todos os buracos internos da máscara
+    filled = binary_fill_holes(binary)
 
-    # Garante que todas as 4 bordas sejam alcançadas
-    # (peças encostadas na borda podem bloquear um único ponto de partida)
-    for pt in [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)]:
-        cv2.floodFill(flood_img, flood_mask, pt, 128)
+    # Furos internos = estavam fora da máscara original, dentro da preenchida
+    internal_holes = filled & ~binary
 
-    # ── 3. Furos internos = ainda 255 após o flood ───────────
-    internal_holes = (flood_img == 255)
-
-    # ── 4. Remove furos internos ─────────────────────────────
+    # Torna os furos transparentes
     new_alpha = alpha.copy()
     new_alpha[internal_holes] = 0
-
-    # ── 5. Erosão leve para limpar ruído de borda ────────────
-    kernel    = np.ones((2, 2), np.uint8)
-    new_alpha = cv2.erode(new_alpha, kernel, iterations=1)
-    # Dilata de volta para não encolher a peça
-    new_alpha = cv2.dilate(new_alpha, kernel, iterations=1)
 
     result = img.copy()
     result.putalpha(Image.fromarray(new_alpha))
@@ -95,22 +73,14 @@ def remove_internal_holes(rgba_bytes):
 
 
 def refine_edges(rgba_bytes, feather=0.8):
-    """
-    Suavização leve de borda com Gaussian sigma baixo.
-    Aplicado DEPOIS do flood fill para não reintroduzir halos.
-    """
+    """Suavização leve de borda — aplicada após o flood fill."""
     img   = Image.open(io.BytesIO(rgba_bytes)).convert("RGBA")
     alpha = np.array(img.split()[3], dtype=np.float32)
-
-    from scipy.ndimage import gaussian_filter
     smooth = gaussian_filter(alpha, sigma=feather)
-
-    # Mantém pixels opacos como opacos (só suaviza a transição de borda)
+    # Mantém pixels opacos como opacos; suaviza só a transição de borda
     final = np.where(alpha > 200, alpha, smooth).astype(np.uint8)
-
     result = img.copy()
     result.putalpha(Image.fromarray(final))
-
     buf = io.BytesIO()
     result.save(buf, format="PNG")
     return buf.getvalue()
@@ -165,8 +135,8 @@ def make_canvas_com_elemento(produto_img, elemento_img,
     px = (CANVAS - produto.width)  // 2
     py = (CANVAS - produto.height) // 2
     paste_rgba(canvas, produto, px, py)
-    elem    = resize_to_scale(elemento_img.convert("RGBA"), CANVAS, escala_elemento)
-    ex, ey  = calc_free_pos(CANVAS, elem.width, elem.height, pos_x, pos_y)
+    elem   = resize_to_scale(elemento_img.convert("RGBA"), CANVAS, escala_elemento)
+    ex, ey = calc_free_pos(CANVAS, elem.width, elem.height, pos_x, pos_y)
     paste_rgba(canvas, elem, ex, ey)
     fundo = Image.new("RGB", (CANVAS, CANVAS), (255, 255, 255))
     fundo.paste(canvas, mask=canvas.split()[3])
