@@ -5,21 +5,30 @@ from PIL import Image
 import io
 import os
 import zipfile
-
+ 
 os.environ["ONNXRUNTIME_PROVIDERS"] = "CPUExecutionProvider"
-
+ 
 app = Flask(__name__, static_folder=".", static_url_path="")
 CORS(app)
-
+ 
 print("Carregando modelo de IA... aguarde.")
 session = new_session("u2net")
 print("Modelo carregado! Servidor pronto.")
-
+ 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "bmp"}
-
+ 
+# ─── Constantes de composição ─────────────────────────────────
+# ATENÇÃO: devem espelhar EXATAMENTE as constantes no index.html (JS)
+#   CANVAS_PY   = 1800
+#   MARGIN_PY   = 40
+#   OFFSET_FRAC = 0.20   (fração do CANVAS usada por ±100 de offset)
+CANVAS      = 1800
+MARGIN      = 40
+OFFSET_FRAC = 0.20
+ 
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
-
+ 
 # ─── Remoção de fundo ─────────────────────────────────────────
 def remove_bg(image_bytes):
     image = Image.open(io.BytesIO(image_bytes))
@@ -28,16 +37,21 @@ def remove_bg(image_bytes):
     buf = io.BytesIO()
     image.save(buf, format="PNG")
     return remove(buf.getvalue(), session=session)
-
+ 
 def to_white_bg(rgba_bytes):
     img   = Image.open(io.BytesIO(rgba_bytes)).convert("RGBA")
     fundo = Image.new("RGBA", img.size, (255, 255, 255, 255))
     fundo.paste(img, mask=img.split()[3])
     return fundo.convert("RGBA")
-
+ 
 # ─── Helpers de composição ────────────────────────────────────
 def resize_to_scale(img, canvas_size, escala):
-    """Redimensiona mantendo proporção para ocupar 'escala' do canvas."""
+    """
+    Redimensiona mantendo proporção para que o lado maior ocupe
+    (canvas_size * escala) pixels.
+    Igual ao JS: previewDim(scalePct) = PREV * (scalePct/100)
+    para o caso quadrado; aqui preservamos a proporção real.
+    """
     img   = img.copy()
     w, h  = img.size
     if w == 0 or h == 0:
@@ -45,159 +59,159 @@ def resize_to_scale(img, canvas_size, escala):
     max_dim = int(canvas_size * escala)
     ratio   = min(max_dim / w, max_dim / h)
     return img.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
-
+ 
 def paste_rgba(canvas, img, x, y):
     if img.mode == "RGBA":
         canvas.paste(img, (x, y), img.split()[3])
     else:
         canvas.paste(img, (x, y))
-
+ 
 # ─── Canvas: produto isolado ──────────────────────────────────
 def make_canvas_produto(produto_img, escala_produto=0.90):
-    CANVAS = 1800
     canvas  = Image.new("RGBA", (CANVAS, CANVAS), (255, 255, 255, 255))
     produto = resize_to_scale(produto_img.convert("RGBA"), CANVAS, escala_produto)
+    # Centralizado — igual ao JS: centerInPreview
     px = (CANVAS - produto.width)  // 2
     py = (CANVAS - produto.height) // 2
     paste_rgba(canvas, produto, px, py)
     fundo = Image.new("RGB", (CANVAS, CANVAS), (255, 255, 255))
     fundo.paste(canvas, mask=canvas.split()[3])
     return fundo
-
+ 
 # ─── Canvas: produto + caixinha (inferior direito) ────────────
 def make_canvas_com_caixinha(produto_img, caixinha_img,
                               escala_produto=0.90, escala_caixinha=0.40,
                               offset_x=0, offset_y=0):
     """
-    offset_x/offset_y: -100..100
-    +X → move para direita, +Y → move para baixo
-    ±100 equivale a ±20% do canvas (±360px no 1800×1800)
+    Espelha EXATAMENTE bottomRightInPreview() do JS:
+      delta_x = (offset_x / 100) * CANVAS * OFFSET_FRAC
+      delta_y = (offset_y / 100) * CANVAS * OFFSET_FRAC
+      cx = CANVAS - w - MARGIN + delta_x
+      cy = CANVAS - h - MARGIN + delta_y
     """
-    CANVAS = 1800
-    MARGIN = 40
     canvas  = Image.new("RGBA", (CANVAS, CANVAS), (255, 255, 255, 255))
-
-    # Produto centrado
+ 
+    # Produto centralizado
     produto = resize_to_scale(produto_img.convert("RGBA"), CANVAS, escala_produto)
     px = (CANVAS - produto.width)  // 2
     py = (CANVAS - produto.height) // 2
     paste_rgba(canvas, produto, px, py)
-
-    # Caixinha — base: inferior direito + offset
-    caixa  = resize_to_scale(caixinha_img.convert("RGBA"), CANVAS, escala_caixinha)
-    delta_x = int((offset_x / 100.0) * CANVAS * 0.20)
-    delta_y = int((offset_y / 100.0) * CANVAS * 0.20)
+ 
+    # Caixinha — canto inferior direito + offset
+    caixa   = resize_to_scale(caixinha_img.convert("RGBA"), CANVAS, escala_caixinha)
+    delta_x = int((offset_x / 100.0) * CANVAS * OFFSET_FRAC)
+    delta_y = int((offset_y / 100.0) * CANVAS * OFFSET_FRAC)
     cx = CANVAS - caixa.width  - MARGIN + delta_x
     cy = CANVAS - caixa.height - MARGIN + delta_y
     paste_rgba(canvas, caixa, cx, cy)
-
+ 
     fundo = Image.new("RGB", (CANVAS, CANVAS), (255, 255, 255))
     fundo.paste(canvas, mask=canvas.split()[3])
     return fundo
-
+ 
 # ─── Canvas: produto + veículo (superior direito) ────────────
 def make_canvas_com_veiculo(produto_img, veiculo_img,
                              escala_produto=0.90, escala_veiculo=0.40,
                              offset_x=0, offset_y=0):
     """
-    offset_x/offset_y: -100..100
-    +X → move para direita, +Y → move para baixo
-    ±100 equivale a ±20% do canvas (±360px no 1800×1800)
+    Espelha EXATAMENTE topRightInPreview() do JS:
+      delta_x = (offset_x / 100) * CANVAS * OFFSET_FRAC
+      delta_y = (offset_y / 100) * CANVAS * OFFSET_FRAC
+      vx = CANVAS - w - MARGIN + delta_x
+      vy = MARGIN + delta_y
     """
-    CANVAS = 1800
-    MARGIN = 40
     canvas  = Image.new("RGBA", (CANVAS, CANVAS), (255, 255, 255, 255))
-
-    # Produto centrado
+ 
+    # Produto centralizado
     produto = resize_to_scale(produto_img.convert("RGBA"), CANVAS, escala_produto)
     px = (CANVAS - produto.width)  // 2
     py = (CANVAS - produto.height) // 2
     paste_rgba(canvas, produto, px, py)
-
-    # Veículo — base: superior direito + offset
+ 
+    # Veículo — canto superior direito + offset
     veiculo = resize_to_scale(veiculo_img.convert("RGBA"), CANVAS, escala_veiculo)
-    delta_x = int((offset_x / 100.0) * CANVAS * 0.20)
-    delta_y = int((offset_y / 100.0) * CANVAS * 0.20)
+    delta_x = int((offset_x / 100.0) * CANVAS * OFFSET_FRAC)
+    delta_y = int((offset_y / 100.0) * CANVAS * OFFSET_FRAC)
     vx = CANVAS - veiculo.width  - MARGIN + delta_x
     vy = MARGIN + delta_y
     paste_rgba(canvas, veiculo, vx, vy)
-
+ 
     fundo = Image.new("RGB", (CANVAS, CANVAS), (255, 255, 255))
     fundo.paste(canvas, mask=canvas.split()[3])
     return fundo
-
+ 
 # ─── Helpers de parse ─────────────────────────────────────────
-def parse_float_pct(val, default, lo=0.30, hi=1.50):
+def parse_float_pct(val, default, lo=0.10, hi=0.90):
     try:
         v = float(val) / 100.0
         return max(lo, min(hi, v))
     except (TypeError, ValueError):
         return default
-
+ 
 def parse_int_offset(val, default=0, lo=-100, hi=100):
     try:
         return max(lo, min(hi, int(val)))
     except (TypeError, ValueError):
         return default
-
+ 
 # ─── Rotas ────────────────────────────────────────────────────
 @app.route("/")
 def index():
     return app.send_static_file("index.html")
-
+ 
 @app.route("/remove-bg", methods=["POST"])
 def remove_background():
     fundo_branco  = request.form.get("fundo_branco",  "false").lower() == "true"
     usar_caixinha = request.form.get("usar_caixinha", "false").lower() == "true"
     usar_veiculo  = request.form.get("usar_veiculo",  "false").lower() == "true"
-
+ 
     idx_caixinha = parse_int_offset(request.form.get("idx_caixinha", "-1"), -1, -1, 9999)
     idx_veiculo  = parse_int_offset(request.form.get("idx_veiculo",  "-1"), -1, -1, 9999)
-
+ 
     escala_produto  = parse_float_pct(request.form.get("escala_produto",  "90"),  0.90)
     escala_caixinha = parse_float_pct(request.form.get("escala_caixinha", "40"),  0.40)
     escala_veiculo  = parse_float_pct(request.form.get("escala_veiculo",  "40"),  0.40)
-
-    offset_box_x    = parse_int_offset(request.form.get("offset_box_x",    "0"))
-    offset_box_y    = parse_int_offset(request.form.get("offset_box_y",    "0"))
-    offset_vehicle_x= parse_int_offset(request.form.get("offset_vehicle_x","0"))
-    offset_vehicle_y= parse_int_offset(request.form.get("offset_vehicle_y","0"))
-
+ 
+    offset_box_x     = parse_int_offset(request.form.get("offset_box_x",     "0"))
+    offset_box_y     = parse_int_offset(request.form.get("offset_box_y",     "0"))
+    offset_vehicle_x = parse_int_offset(request.form.get("offset_vehicle_x", "0"))
+    offset_vehicle_y = parse_int_offset(request.form.get("offset_vehicle_y", "0"))
+ 
     print(f"[DEBUG] prod={escala_produto:.2f} "
           f"caixa={escala_caixinha:.2f} off=({offset_box_x},{offset_box_y}) "
           f"veiculo={escala_veiculo:.2f} off=({offset_vehicle_x},{offset_vehicle_y})")
-
+ 
     produtos_files = request.files.getlist("produtos")
     if not produtos_files:
         return jsonify({"error": "Nenhuma imagem enviada."}), 400
-
+ 
     produtos_bytes = []
     for f in produtos_files:
         if not allowed_file(f.filename):
             return jsonify({"error": f"Formato não suportado: {f.filename}"}), 400
         produtos_bytes.append((f.filename, f.read()))
-
+ 
     caixinha_bytes = None
     veiculo_bytes  = None
     if usar_caixinha and "caixinha" in request.files:
         caixinha_bytes = request.files["caixinha"].read()
     if usar_veiculo and "veiculo" in request.files:
         veiculo_bytes = request.files["veiculo"].read()
-
+ 
     try:
         produtos_sem_fundo = [remove_bg(b) for _, b in produtos_bytes]
         caixinha_sem_fundo = remove_bg(caixinha_bytes) if caixinha_bytes else None
         veiculo_sem_fundo  = remove_bg(veiculo_bytes)  if veiculo_bytes  else None
-
+ 
         indices_colagem = set()
         if usar_caixinha and caixinha_sem_fundo and 0 <= idx_caixinha < len(produtos_sem_fundo):
             indices_colagem.add(idx_caixinha)
         if usar_veiculo and veiculo_sem_fundo and 0 <= idx_veiculo < len(produtos_sem_fundo):
             indices_colagem.add(idx_veiculo)
-
+ 
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-
+ 
             # ── Produtos individuais (sem colagem) ──
             for i, (nome_original, _) in enumerate(produtos_bytes):
                 if i in indices_colagem:
@@ -205,18 +219,18 @@ def remove_background():
                 prod_img = Image.open(io.BytesIO(produtos_sem_fundo[i])).convert("RGBA")
                 if fundo_branco:
                     prod_img = to_white_bg(produtos_sem_fundo[i])
-                canvas = make_canvas_produto(prod_img, escala_produto=escala_produto)
+                canvas_img = make_canvas_produto(prod_img, escala_produto=escala_produto)
                 buf = io.BytesIO()
-                canvas.save(buf, format="PNG")
+                canvas_img.save(buf, format="PNG")
                 zf.writestr(os.path.splitext(nome_original)[0] + ".png", buf.getvalue())
-
+ 
             # ── Colagem caixinha ──
             if usar_caixinha and caixinha_sem_fundo and 0 <= idx_caixinha < len(produtos_sem_fundo):
                 prod_img  = Image.open(io.BytesIO(produtos_sem_fundo[idx_caixinha])).convert("RGBA")
                 caixa_img = Image.open(io.BytesIO(caixinha_sem_fundo)).convert("RGBA")
                 if fundo_branco:
                     prod_img = to_white_bg(produtos_sem_fundo[idx_caixinha])
-                canvas = make_canvas_com_caixinha(
+                canvas_img = make_canvas_com_caixinha(
                     prod_img, caixa_img,
                     escala_produto=escala_produto,
                     escala_caixinha=escala_caixinha,
@@ -224,17 +238,17 @@ def remove_background():
                     offset_y=offset_box_y
                 )
                 buf = io.BytesIO()
-                canvas.save(buf, format="PNG")
+                canvas_img.save(buf, format="PNG")
                 nome_base = os.path.splitext(produtos_bytes[idx_caixinha][0])[0]
                 zf.writestr(f"{nome_base}_com_caixinha.png", buf.getvalue())
-
+ 
             # ── Colagem veículo ──
             if usar_veiculo and veiculo_sem_fundo and 0 <= idx_veiculo < len(produtos_sem_fundo):
                 prod_img    = Image.open(io.BytesIO(produtos_sem_fundo[idx_veiculo])).convert("RGBA")
                 veiculo_img = Image.open(io.BytesIO(veiculo_sem_fundo)).convert("RGBA")
                 if fundo_branco:
                     prod_img = to_white_bg(produtos_sem_fundo[idx_veiculo])
-                canvas = make_canvas_com_veiculo(
+                canvas_img = make_canvas_com_veiculo(
                     prod_img, veiculo_img,
                     escala_produto=escala_produto,
                     escala_veiculo=escala_veiculo,
@@ -242,18 +256,18 @@ def remove_background():
                     offset_y=offset_vehicle_y
                 )
                 buf = io.BytesIO()
-                canvas.save(buf, format="PNG")
+                canvas_img.save(buf, format="PNG")
                 nome_base = os.path.splitext(produtos_bytes[idx_veiculo][0])[0]
                 zf.writestr(f"{nome_base}_com_veiculo.png", buf.getvalue())
-
+ 
         zip_buffer.seek(0)
         return send_file(zip_buffer, mimetype="application/zip",
                          download_name="imagens_processadas.zip")
-
+ 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-
+ 
+ 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(debug=False, host="0.0.0.0", port=port)
