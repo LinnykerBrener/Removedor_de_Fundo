@@ -784,7 +784,12 @@ document.getElementById('btn-process').addEventListener('click', async () => {
     setStatus(`Processando ${productFiles.length} imagem(ns)... aguarde.`);
     const response = await fetch('/remove-bg', { method: 'POST', body: formData });
     progressBar.style.width = '90%';
-    if (!response.ok) { const err = await response.json(); throw new Error(err.error || 'Erro desconhecido.'); }
+    if (!response.ok) {
+  const text = await response.text();
+  let msg = 'Erro desconhecido.';
+  try { msg = JSON.parse(text).error; } catch { msg = `Erro ${response.status} — veja o log do servidor`; }
+  throw new Error(msg);
+}
     const zipBlob = await response.blob();
     const arrayBuffer = await zipBlob.arrayBuffer();
     const entries = await unzipAll(arrayBuffer);
