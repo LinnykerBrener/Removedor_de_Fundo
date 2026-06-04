@@ -74,22 +74,15 @@
     }
 
     /* Barras de controle */
-    .ctrl-row {
-      display: flex; align-items: center; gap: 1rem; margin-top: 0.85rem;
-    }
-    .ctrl-row label { font-size: 0.82rem; color: var(--muted); white-space: nowrap; min-width: 180px; }
+    .ctrl-row { display: flex; align-items: center; gap: 1rem; margin-top: 0.85rem; }
+    .ctrl-row label { font-size: 0.82rem; color: var(--muted); white-space: nowrap; min-width: 165px; }
     .ctrl-row input[type=range] { flex: 1; cursor: pointer; }
     .ctrl-row input[type=range].range-accent  { accent-color: var(--accent); }
     .ctrl-row input[type=range].range-accent2 { accent-color: var(--accent2); }
     .ctrl-val-green { font-size: 0.82rem; font-weight: 600; color: var(--accent);  min-width: 42px; text-align: right; }
     .ctrl-val-blue  { font-size: 0.82rem; font-weight: 600; color: var(--accent2); min-width: 42px; text-align: right; }
 
-    /* Preview produto (só escala) — abaixo da grade */
-    .preview-wrap { margin-top: 1.25rem; display: none; flex-direction: column; gap: 0.5rem; }
-    .preview-wrap.visible { display: flex; }
-    .preview-label { font-size: 0.75rem; color: var(--muted); }
-
-    /* Preview box: checkered ou branco */
+    /* Preview boxes */
     .preview-box {
       width: 280px; height: 280px;
       background: repeating-conic-gradient(#1a1a2e 0% 25%, #111118 0% 50%) 0 0/16px 16px;
@@ -97,13 +90,7 @@
       position: relative; overflow: hidden; flex-shrink: 0;
     }
     .preview-box.white-bg { background: #ffffff; }
-
-    /* Imagens dentro do preview — posicionadas via JS com left/top em px */
-    .preview-box img {
-      position: absolute;
-      object-fit: contain;
-      display: none;
-    }
+    .preview-box img { position: absolute; object-fit: contain; display: none; }
 
     /* Opções */
     .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
@@ -124,11 +111,7 @@
     .extra-panel.visible { display: flex; }
 
     /* Layout lado a lado: controles + preview */
-    .panel-inner {
-      display: flex;
-      gap: 1.25rem;
-      align-items: flex-start;
-    }
+    .panel-inner { display: flex; gap: 1.25rem; align-items: flex-start; }
     .panel-controls { flex: 1; min-width: 0; }
     .panel-preview  { display: flex; flex-direction: column; gap: 0.4rem; align-items: center; }
     .panel-preview .preview-label { font-size: 0.72rem; color: var(--muted); }
@@ -142,6 +125,54 @@
 
     .sep { border: none; border-top: 1px solid var(--border); margin: 0.5rem 0; }
     .sub-title { font-size: 0.7rem; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 0.1rem; }
+
+    /* Joystick 2D */
+    .joystick-wrap {
+      display: flex; flex-direction: column; align-items: center; gap: 0.5rem; margin-top: 0.85rem;
+    }
+    .joystick-label { font-size: 0.82rem; color: var(--muted); align-self: flex-start; }
+    .joystick-area {
+      width: 120px; height: 120px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 50%; position: relative; cursor: crosshair;
+      flex-shrink: 0; touch-action: none;
+    }
+    .joystick-area::before {
+      content: ''; position: absolute; inset: 0;
+      border-radius: 50%;
+      background: radial-gradient(circle at center, rgba(110,231,183,0.06) 0%, transparent 70%);
+    }
+    /* crosshair lines */
+    .joystick-area::after {
+      content: ''; position: absolute;
+      top: 50%; left: 10%; right: 10%; height: 1px;
+      background: var(--border); transform: translateY(-50%);
+    }
+    .joystick-vline {
+      position: absolute; left: 50%; top: 10%; bottom: 10%; width: 1px;
+      background: var(--border); transform: translateX(-50%); pointer-events: none;
+    }
+    .joystick-handle {
+      position: absolute; width: 24px; height: 24px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 50%; transform: translate(-50%, -50%);
+      top: 50%; left: 50%; pointer-events: none;
+      box-shadow: 0 0 10px rgba(110,231,183,0.4);
+      transition: box-shadow 0.15s;
+    }
+    .joystick-area:active .joystick-handle {
+      box-shadow: 0 0 20px rgba(110,231,183,0.7);
+    }
+    .joystick-coords {
+      font-size: 0.75rem; color: var(--accent2); font-weight: 600;
+      letter-spacing: 1px;
+    }
+    .joystick-reset {
+      font-size: 0.7rem; color: var(--muted); cursor: pointer;
+      background: none; border: 1px solid var(--border); border-radius: 6px;
+      padding: 0.2rem 0.6rem; transition: border-color 0.2s, color 0.2s;
+    }
+    .joystick-reset:hover { border-color: var(--accent); color: var(--accent); }
 
     /* Botões */
     .btn-process {
@@ -205,7 +236,6 @@
     </div>
     <div class="products-grid" id="products-grid"></div>
 
-    <!-- Escala do produto + preview lado a lado -->
     <div id="row-scale-produto" style="display:none; margin-top:1rem;">
       <div class="panel-inner">
         <div class="panel-controls" style="padding-top:0.25rem;">
@@ -241,8 +271,6 @@
           <label class="switch"><input type="checkbox" id="toggle-branco"/><span class="slider"></span></label>
         </div>
       </div>
-
-      <!-- placeholder para grid ficar 2 colunas na linha do branco -->
       <div></div>
 
       <!-- CAIXINHA -->
@@ -250,14 +278,13 @@
         <div class="option-header">
           <div>
             <div class="option-label">Colagem com caixinha</div>
-            <div class="option-desc">Produto ao lado da caixa — caixinha no canto inferior direito</div>
+            <div class="option-desc">Posicione a caixinha livremente no canvas</div>
           </div>
           <label class="switch"><input type="checkbox" id="toggle-box"/><span class="slider"></span></label>
         </div>
 
         <div class="extra-panel" id="panel-box">
           <div class="panel-inner">
-            <!-- Controles -->
             <div class="panel-controls">
               <div class="mini-drop" id="drop-box">
                 📦 Clique para enviar foto da caixinha
@@ -276,24 +303,22 @@
               </div>
 
               <hr class="sep"/>
-              <div class="sub-title">Posição da caixinha</div>
-              <div class="ctrl-row">
-                <label>⬅️ Esquerda / Direita ➡️</label>
-                <input type="range" id="pos-box-x" class="range-accent2" min="-100" max="100" value="0" step="1"/>
-                <span class="ctrl-val-blue" id="val-pos-box-x">0</span>
-              </div>
-              <div class="ctrl-row">
-                <label>⬆️ Cima / Baixo ⬇️</label>
-                <input type="range" id="pos-box-y" class="range-accent2" min="-100" max="100" value="0" step="1"/>
-                <span class="ctrl-val-blue" id="val-pos-box-y">0</span>
+              <div class="sub-title">Posição livre da caixinha</div>
+              <div class="joystick-wrap">
+                <div class="joystick-label">Arraste para posicionar em qualquer lugar</div>
+                <div class="joystick-area" id="joy-box">
+                  <div class="joystick-vline"></div>
+                  <div class="joystick-handle" id="joy-box-handle"></div>
+                </div>
+                <div class="joystick-coords" id="joy-box-coords">X: 0 · Y: 0</div>
+                <button class="joystick-reset" id="joy-box-reset">↺ Centralizar</button>
               </div>
             </div>
 
-            <!-- Preview caixinha -->
             <div class="panel-preview">
               <div class="preview-label">Pré‑visualização caixinha</div>
               <div class="preview-box" id="preview-box-caixinha">
-                <img id="prev-caixinha-produto" alt="produto na caixinha"/>
+                <img id="prev-caixinha-produto" alt="produto"/>
                 <img id="prev-caixinha"         alt="caixinha"/>
               </div>
             </div>
@@ -306,14 +331,13 @@
         <div class="option-header">
           <div>
             <div class="option-label">Colagem com veículo</div>
-            <div class="option-desc">Produto ao lado do carro — veículo no canto superior direito</div>
+            <div class="option-desc">Posicione o veículo livremente no canvas</div>
           </div>
           <label class="switch"><input type="checkbox" id="toggle-vehicle"/><span class="slider"></span></label>
         </div>
 
         <div class="extra-panel" id="panel-vehicle">
           <div class="panel-inner">
-            <!-- Controles -->
             <div class="panel-controls">
               <div class="mini-drop" id="drop-vehicle">
                 🚗 Clique para enviar foto do veículo
@@ -332,24 +356,22 @@
               </div>
 
               <hr class="sep"/>
-              <div class="sub-title">Posição do veículo</div>
-              <div class="ctrl-row">
-                <label>⬅️ Esquerda / Direita ➡️</label>
-                <input type="range" id="pos-vehicle-x" class="range-accent2" min="-100" max="100" value="0" step="1"/>
-                <span class="ctrl-val-blue" id="val-pos-vehicle-x">0</span>
-              </div>
-              <div class="ctrl-row">
-                <label>⬆️ Cima / Baixo ⬇️</label>
-                <input type="range" id="pos-vehicle-y" class="range-accent2" min="-100" max="100" value="0" step="1"/>
-                <span class="ctrl-val-blue" id="val-pos-vehicle-y">0</span>
+              <div class="sub-title">Posição livre do veículo</div>
+              <div class="joystick-wrap">
+                <div class="joystick-label">Arraste para posicionar em qualquer lugar</div>
+                <div class="joystick-area" id="joy-vehicle">
+                  <div class="joystick-vline"></div>
+                  <div class="joystick-handle" id="joy-vehicle-handle"></div>
+                </div>
+                <div class="joystick-coords" id="joy-vehicle-coords">X: 0 · Y: 0</div>
+                <button class="joystick-reset" id="joy-vehicle-reset">↺ Centralizar</button>
               </div>
             </div>
 
-            <!-- Preview veículo -->
             <div class="panel-preview">
               <div class="preview-label">Pré‑visualização veículo</div>
               <div class="preview-box" id="preview-box-veiculo">
-                <img id="prev-veiculo-produto" alt="produto no veículo"/>
+                <img id="prev-veiculo-produto" alt="produto"/>
                 <img id="prev-veiculo"         alt="veículo"/>
               </div>
             </div>
@@ -385,27 +407,30 @@
 
 <script>
 /* ═══════════════════════════════════════════════════════════════
-   CONSTANTES — devem espelhar EXATAMENTE o Python (app.py)
+   CONSTANTES — espelham EXATAMENTE o Python (app.py)
    ─────────────────────────────────────────────────────────────
-   CANVAS_PY  = 1800  (tamanho real gerado)
-   MARGIN_PY  = 40    (margem em pixels no canvas real)
-   OFFSET_FRAC = 0.20 (fração do canvas usado por ±100 de offset)
-
-   No preview (PREV px²) escalamos tudo proporcionalmente:
-     factor = PREV / CANVAS_PY
-   Assim qualquer coordenada real ÷ CANVAS_PY * PREV = coord no preview.
+   Sistema de posição:
+     pos_x, pos_y ∈ [-100, 100]
+     0,0 = centro do canvas
+     A imagem secundária é posicionada de modo que seu CENTRO
+     fique em: (canvas/2 + pos_x/100 * canvas/2, canvas/2 + pos_y/100 * canvas/2)
+     Ou seja: ±100 leva o CENTRO da imagem até a borda do canvas.
 ═══════════════════════════════════════════════════════════════ */
-const CANVAS_PY   = 1800;
-const MARGIN_PY   = 40;
-const OFFSET_FRAC = 0.20;   // igual ao Python: CANVAS * 0.20
-const PREV        = 280;    // tamanho do quadrado de preview (px)
-const FACTOR      = PREV / CANVAS_PY;  // ~0.1556
+const CANVAS_PY = 1800;
+const PREV      = 280;
+const FACTOR    = PREV / CANVAS_PY;
 
 /* ─── Estado global ─────────────────────────────────────── */
 const productFiles = [];
-let boxFile     = null, vehicleFile = null;
-let boxURL      = null, vehicleURL  = null;
+let boxFile = null, vehicleFile = null;
+let boxURL  = null, vehicleURL  = null;
 let resultFiles = [];
+
+// Posições dos joysticks: -100..100 mapeando centro do canvas
+const joyState = {
+  box:     { x: 0, y: 0 },
+  vehicle: { x: 0, y: 0 }
+};
 
 /* ─── Referências DOM ────────────────────────────────────── */
 const elDropProducts  = document.getElementById('drop-products');
@@ -414,12 +439,9 @@ const elProductsGrid  = document.getElementById('products-grid');
 const elRowScaleProd  = document.getElementById('row-scale-produto');
 const elScaleProd     = document.getElementById('scale-produto');
 const elValScaleProd  = document.getElementById('val-scale-produto');
-
-// Preview produto (isolado)
 const elPrevBoxProd   = document.getElementById('preview-box-produto');
 const elPrevProduto   = document.getElementById('prev-produto');
 
-// Caixinha
 const elToggleBox     = document.getElementById('toggle-box');
 const elPanelBox      = document.getElementById('panel-box');
 const elDropBox       = document.getElementById('drop-box');
@@ -427,15 +449,10 @@ const elInputBox      = document.getElementById('input-box');
 const elSelectBox     = document.getElementById('select-box-product');
 const elScaleBox      = document.getElementById('scale-box');
 const elValScaleBox   = document.getElementById('val-scale-box');
-const elPosBoxX       = document.getElementById('pos-box-x');
-const elPosBoxY       = document.getElementById('pos-box-y');
-const elValPosBoxX    = document.getElementById('val-pos-box-x');
-const elValPosBoxY    = document.getElementById('val-pos-box-y');
 const elPrevBoxCaixa  = document.getElementById('preview-box-caixinha');
 const elPrevCaixaProd = document.getElementById('prev-caixinha-produto');
 const elPrevCaixinha  = document.getElementById('prev-caixinha');
 
-// Veículo
 const elToggleVehicle  = document.getElementById('toggle-vehicle');
 const elPanelVehicle   = document.getElementById('panel-vehicle');
 const elDropVehicle    = document.getElementById('drop-vehicle');
@@ -443,96 +460,108 @@ const elInputVehicle   = document.getElementById('input-vehicle');
 const elSelectVehicle  = document.getElementById('select-vehicle-product');
 const elScaleVehicle   = document.getElementById('scale-vehicle');
 const elValScaleVehicle= document.getElementById('val-scale-vehicle');
-const elPosVehicleX    = document.getElementById('pos-vehicle-x');
-const elPosVehicleY    = document.getElementById('pos-vehicle-y');
-const elValPosVehicleX = document.getElementById('val-pos-vehicle-x');
-const elValPosVehicleY = document.getElementById('val-pos-vehicle-y');
 const elPrevBoxVeiculo = document.getElementById('preview-box-veiculo');
 const elPrevVeicProd   = document.getElementById('prev-veiculo-produto');
 const elPrevVeiculo    = document.getElementById('prev-veiculo');
 
 /* ═══════════════════════════════════════════════════════════
-   FUNÇÕES DE LAYOUT — espelham a lógica do Python pixel a pixel
-   ═══════════════════════════════════════════════════════════
+   JOYSTICK 2D — posicionamento livre
+   ─────────────────────────────────────────────────────────
+   O joystick é um círculo de 120px. O handle se move livremente
+   dentro dele. A posição normalizada (-1..1) é mapeada para
+   pos_x/pos_y (-100..100) que vão para o Python.
+═══════════════════════════════════════════════════════════ */
+function makeJoystick(areaId, handleId, coordsId, resetId, stateKey, onUpdate) {
+  const area   = document.getElementById(areaId);
+  const handle = document.getElementById(handleId);
+  const coords = document.getElementById(coordsId);
+  const resetBtn = document.getElementById(resetId);
+  let dragging = false;
 
-   Python: resize_to_scale(img, CANVAS, escala)
-     → max_dim = CANVAS * escala
-     → ratio   = min(max_dim/w, max_dim/h)   (mantém proporção)
-   No preview usamos PREV * escala como max_dim.
+  const R = 60; // raio do joystick em px (metade de 120)
 
-   Para simplificar o preview (não temos a img real sem fundo),
-   usamos um quadrado como proxy da peça.
-*/
+  function setFromNorm(nx, ny) {
+    // nx, ny: -1..1
+    nx = Math.max(-1, Math.min(1, nx));
+    ny = Math.max(-1, Math.min(1, ny));
+    handle.style.left = (R + nx * R) + 'px';
+    handle.style.top  = (R + ny * R) + 'px';
+    const px = Math.round(nx * 100);
+    const py = Math.round(ny * 100);
+    joyState[stateKey].x = px;
+    joyState[stateKey].y = py;
+    coords.textContent = `X: ${px} · Y: ${py}`;
+    onUpdate();
+  }
 
-/**
- * Calcula dimensão do proxy quadrado no preview,
- * equivalente a resize_to_scale com imagem quadrada.
- * → dim = PREV * (escala/100)
- */
+  function getEventPos(e) {
+    const rect = area.getBoundingClientRect();
+    const cl = e.touches ? e.touches[0].clientX : e.clientX;
+    const ct = e.touches ? e.touches[0].clientY : e.clientY;
+    return { x: cl - rect.left - R, y: ct - rect.top - R };
+  }
+
+  area.addEventListener('mousedown',  e => { dragging = true; move(e); });
+  area.addEventListener('touchstart', e => { e.preventDefault(); dragging = true; move(e); }, { passive: false });
+  window.addEventListener('mousemove',  e => { if (dragging) move(e); });
+  window.addEventListener('touchmove',  e => { if (dragging) { e.preventDefault(); move(e); } }, { passive: false });
+  window.addEventListener('mouseup',  () => dragging = false);
+  window.addEventListener('touchend', () => dragging = false);
+
+  function move(e) {
+    const { x, y } = getEventPos(e);
+    // Clampear dentro do círculo (não quadrado)
+    const dist = Math.sqrt(x*x + y*y);
+    const clamp = dist > R ? R / dist : 1;
+    setFromNorm((x * clamp) / R, (y * clamp) / R);
+  }
+
+  resetBtn.addEventListener('click', () => setFromNorm(0, 0));
+
+  // Inicializa no centro
+  setFromNorm(0, 0);
+
+  return setFromNorm;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   POSICIONAMENTO NO PREVIEW
+   ─────────────────────────────────────────────────────────
+   pos_x, pos_y ∈ -100..100
+   Centro do elemento no preview:
+     cx = PREV/2 + (pos_x/100) * (PREV/2)
+     cy = PREV/2 + (pos_y/100) * (PREV/2)
+   left = cx - dim/2
+   top  = cy - dim/2
+   Idêntico ao Python.
+═══════════════════════════════════════════════════════════ */
 function previewDim(scalePct) {
   return Math.round(PREV * (scalePct / 100));
 }
 
-/**
- * Posiciona img centralizada no preview box.
- * Equivale ao Python: px = (CANVAS-w)//2, py = (CANVAS-h)//2
- */
 function centerInPreview(imgEl, dim) {
   const x = Math.round((PREV - dim) / 2);
   const y = Math.round((PREV - dim) / 2);
-  imgEl.style.width  = dim + 'px';
-  imgEl.style.height = dim + 'px';
-  imgEl.style.left   = x + 'px';
-  imgEl.style.top    = y + 'px';
-  imgEl.style.right  = '';
-  imgEl.style.bottom = '';
-  imgEl.style.display = 'block';
+  applyPos(imgEl, dim, x, y);
 }
 
-/**
- * Posiciona elemento no canto inferior direito + offset.
- * Equivale ao Python:
- *   delta_x = (offset_x/100) * CANVAS * OFFSET_FRAC
- *   delta_y = (offset_y/100) * CANVAS * OFFSET_FRAC
- *   cx = CANVAS - w - MARGIN + delta_x
- *   cy = CANVAS - h - MARGIN + delta_y
- * Tudo multiplicado por FACTOR para o preview.
- */
-function bottomRightInPreview(imgEl, dim, offX, offY) {
-  const margin_prev = MARGIN_PY * FACTOR;
-  const delta_x = (offX / 100) * PREV * OFFSET_FRAC;
-  const delta_y = (offY / 100) * PREV * OFFSET_FRAC;
-  const cx = Math.round(PREV - dim - margin_prev + delta_x);
-  const cy = Math.round(PREV - dim - margin_prev + delta_y);
-  imgEl.style.width  = dim + 'px';
-  imgEl.style.height = dim + 'px';
-  imgEl.style.left   = cx + 'px';
-  imgEl.style.top    = cy + 'px';
-  imgEl.style.right  = '';
-  imgEl.style.bottom = '';
-  imgEl.style.display = 'block';
+function freePositionInPreview(imgEl, dim, posX, posY) {
+  // posX, posY: -100..100
+  // centro alvo:
+  const cx = PREV / 2 + (posX / 100) * (PREV / 2);
+  const cy = PREV / 2 + (posY / 100) * (PREV / 2);
+  const x  = Math.round(cx - dim / 2);
+  const y  = Math.round(cy - dim / 2);
+  applyPos(imgEl, dim, x, y);
 }
 
-/**
- * Posiciona elemento no canto superior direito + offset.
- * Equivale ao Python:
- *   delta_x = (offset_x/100) * CANVAS * OFFSET_FRAC
- *   delta_y = (offset_y/100) * CANVAS * OFFSET_FRAC
- *   vx = CANVAS - w - MARGIN + delta_x
- *   vy = MARGIN + delta_y
- */
-function topRightInPreview(imgEl, dim, offX, offY) {
-  const margin_prev = MARGIN_PY * FACTOR;
-  const delta_x = (offX / 100) * PREV * OFFSET_FRAC;
-  const delta_y = (offY / 100) * PREV * OFFSET_FRAC;
-  const vx = Math.round(PREV - dim - margin_prev + delta_x);
-  const vy = Math.round(margin_prev + delta_y);
-  imgEl.style.width  = dim + 'px';
-  imgEl.style.height = dim + 'px';
-  imgEl.style.left   = vx + 'px';
-  imgEl.style.top    = vy + 'px';
-  imgEl.style.right  = '';
-  imgEl.style.bottom = '';
+function applyPos(imgEl, dim, x, y) {
+  imgEl.style.width   = dim + 'px';
+  imgEl.style.height  = dim + 'px';
+  imgEl.style.left    = x + 'px';
+  imgEl.style.top     = y + 'px';
+  imgEl.style.right   = '';
+  imgEl.style.bottom  = '';
   imgEl.style.display = 'block';
 }
 
@@ -561,15 +590,13 @@ function updatePreviewProduto() {
 elScaleProd.addEventListener('input', () => {
   elValScaleProd.textContent = elScaleProd.value + '%';
   updatePreviewProduto();
-  updatePreviewCaixinha(); // produto também muda nas colagens
+  updatePreviewCaixinha();
   updatePreviewVeiculo();
 });
 
 /* ─── PREVIEW: caixinha ──────────────────────────────────── */
 function updatePreviewCaixinha() {
   if (!elToggleBox.checked) return;
-
-  // Produto na colagem de caixinha
   const idxProd = parseInt(elSelectBox.value);
   const prodFile = (!isNaN(idxProd) && productFiles[idxProd]) ? productFiles[idxProd] : (productFiles[0] || null);
   if (prodFile) {
@@ -579,14 +606,10 @@ function updatePreviewCaixinha() {
   } else {
     elPrevCaixaProd.style.display = 'none';
   }
-
-  // Caixinha posicionada
   if (boxFile) {
-    const dim  = previewDim(parseInt(elScaleBox.value));
-    const offX = parseInt(elPosBoxX.value);
-    const offY = parseInt(elPosBoxY.value);
+    const dim = previewDim(parseInt(elScaleBox.value));
     elPrevCaixinha.src = boxURL;
-    bottomRightInPreview(elPrevCaixinha, dim, offX, offY);
+    freePositionInPreview(elPrevCaixinha, dim, joyState.box.x, joyState.box.y);
   } else {
     elPrevCaixinha.style.display = 'none';
   }
@@ -596,21 +619,11 @@ elScaleBox.addEventListener('input', () => {
   elValScaleBox.textContent = elScaleBox.value + '%';
   updatePreviewCaixinha();
 });
-elPosBoxX.addEventListener('input', () => {
-  elValPosBoxX.textContent = elPosBoxX.value;
-  updatePreviewCaixinha();
-});
-elPosBoxY.addEventListener('input', () => {
-  elValPosBoxY.textContent = elPosBoxY.value;
-  updatePreviewCaixinha();
-});
 elSelectBox.addEventListener('change', updatePreviewCaixinha);
 
 /* ─── PREVIEW: veículo ───────────────────────────────────── */
 function updatePreviewVeiculo() {
   if (!elToggleVehicle.checked) return;
-
-  // Produto na colagem de veículo
   const idxProd = parseInt(elSelectVehicle.value);
   const prodFile = (!isNaN(idxProd) && productFiles[idxProd]) ? productFiles[idxProd] : (productFiles[0] || null);
   if (prodFile) {
@@ -620,14 +633,10 @@ function updatePreviewVeiculo() {
   } else {
     elPrevVeicProd.style.display = 'none';
   }
-
-  // Veículo posicionado
   if (vehicleFile) {
-    const dim  = previewDim(parseInt(elScaleVehicle.value));
-    const offX = parseInt(elPosVehicleX.value);
-    const offY = parseInt(elPosVehicleY.value);
+    const dim = previewDim(parseInt(elScaleVehicle.value));
     elPrevVeiculo.src = vehicleURL;
-    topRightInPreview(elPrevVeiculo, dim, offX, offY);
+    freePositionInPreview(elPrevVeiculo, dim, joyState.vehicle.x, joyState.vehicle.y);
   } else {
     elPrevVeiculo.style.display = 'none';
   }
@@ -637,15 +646,11 @@ elScaleVehicle.addEventListener('input', () => {
   elValScaleVehicle.textContent = elScaleVehicle.value + '%';
   updatePreviewVeiculo();
 });
-elPosVehicleX.addEventListener('input', () => {
-  elValPosVehicleX.textContent = elPosVehicleX.value;
-  updatePreviewVeiculo();
-});
-elPosVehicleY.addEventListener('input', () => {
-  elValPosVehicleY.textContent = elPosVehicleY.value;
-  updatePreviewVeiculo();
-});
 elSelectVehicle.addEventListener('change', updatePreviewVeiculo);
+
+/* ─── Inicializa joysticks ───────────────────────────────── */
+makeJoystick('joy-box',     'joy-box-handle',     'joy-box-coords',     'joy-box-reset',     'box',     updatePreviewCaixinha);
+makeJoystick('joy-vehicle', 'joy-vehicle-handle', 'joy-vehicle-coords', 'joy-vehicle-reset', 'vehicle', updatePreviewVeiculo);
 
 /* ─── Produtos: upload ───────────────────────────────────── */
 elDropProducts.addEventListener('click', () => elInputProducts.click());
@@ -660,31 +665,19 @@ function addProducts(files) {
     const idx = productFiles.length - 1;
     const div = document.createElement('div');
     div.className = 'product-item';
-    const img  = document.createElement('img');
-    img.src = URL.createObjectURL(f);
-    const lbl  = document.createElement('div');
-    lbl.className = 'item-name';
-    lbl.textContent = f.name;
-    const btn  = document.createElement('button');
-    btn.className = 'remove-btn';
-    btn.innerHTML = '×';
+    const img  = document.createElement('img'); img.src = URL.createObjectURL(f);
+    const lbl  = document.createElement('div'); lbl.className = 'item-name'; lbl.textContent = f.name;
+    const btn  = document.createElement('button'); btn.className = 'remove-btn'; btn.innerHTML = '×';
     btn.onclick = () => {
-      productFiles.splice(idx, 1);
-      div.remove();
-      updateSelects();
-      checkReady();
-      updatePreviewProduto();
-      updatePreviewCaixinha();
-      updatePreviewVeiculo();
+      productFiles.splice(idx, 1); div.remove();
+      updateSelects(); checkReady();
+      updatePreviewProduto(); updatePreviewCaixinha(); updatePreviewVeiculo();
     };
     div.appendChild(img); div.appendChild(lbl); div.appendChild(btn);
     elProductsGrid.appendChild(div);
   });
-  updateSelects();
-  checkReady();
-  updatePreviewProduto();
-  updatePreviewCaixinha();
-  updatePreviewVeiculo();
+  updateSelects(); checkReady();
+  updatePreviewProduto(); updatePreviewCaixinha(); updatePreviewVeiculo();
 }
 
 /* ─── Toggle caixinha ────────────────────────────────────── */
@@ -692,7 +685,6 @@ elToggleBox.addEventListener('change', function() {
   elPanelBox.classList.toggle('visible', this.checked);
   updatePreviewCaixinha();
 });
-
 elDropBox.addEventListener('click', () => elInputBox.click());
 elInputBox.addEventListener('change', () => {
   boxFile = elInputBox.files[0];
@@ -710,7 +702,6 @@ elToggleVehicle.addEventListener('change', function() {
   elPanelVehicle.classList.toggle('visible', this.checked);
   updatePreviewVeiculo();
 });
-
 elDropVehicle.addEventListener('click', () => elInputVehicle.click());
 elInputVehicle.addEventListener('change', () => {
   vehicleFile = elInputVehicle.files[0];
@@ -742,11 +733,9 @@ function updateSelects() {
 function checkReady() {
   document.getElementById('btn-process').disabled = productFiles.length === 0;
 }
-
 function setStatus(msg, type = '') {
   const el = document.getElementById('status');
-  el.textContent = msg;
-  el.className = type;
+  el.textContent = msg; el.className = type;
 }
 
 /* ─── Processar ──────────────────────────────────────────── */
@@ -769,21 +758,21 @@ document.getElementById('btn-process').addEventListener('click', async () => {
 
   const formData = new FormData();
   productFiles.forEach(f => formData.append('produtos', f));
-  formData.append('fundo_branco',    fundoBranco ? 'true' : 'false');
-  formData.append('escala_produto',  elScaleProd.value);
-  formData.append('escala_caixinha', elScaleBox.value);
-  formData.append('escala_veiculo',  elScaleVehicle.value);
-  formData.append('offset_box_x',    elPosBoxX.value);
-  formData.append('offset_box_y',    elPosBoxY.value);
-  formData.append('offset_vehicle_x',elPosVehicleX.value);
-  formData.append('offset_vehicle_y',elPosVehicleY.value);
+  formData.append('fundo_branco',   fundoBranco ? 'true' : 'false');
+  formData.append('escala_produto', elScaleProd.value);
+  formData.append('escala_caixinha',elScaleBox.value);
+  formData.append('escala_veiculo', elScaleVehicle.value);
+  // Posição livre: envia pos_x/pos_y (-100..100)
+  formData.append('pos_box_x',      joyState.box.x);
+  formData.append('pos_box_y',      joyState.box.y);
+  formData.append('pos_vehicle_x',  joyState.vehicle.x);
+  formData.append('pos_vehicle_y',  joyState.vehicle.y);
 
   formData.append('usar_caixinha', useBox ? 'true' : 'false');
   if (useBox && boxFile) {
     formData.append('caixinha', boxFile);
     formData.append('idx_caixinha', elSelectBox.value);
   }
-
   formData.append('usar_veiculo', useVehicle ? 'true' : 'false');
   if (useVehicle && vehicleFile) {
     formData.append('veiculo', vehicleFile);
@@ -793,41 +782,30 @@ document.getElementById('btn-process').addEventListener('click', async () => {
   try {
     progressBar.style.width = '40%';
     setStatus(`Processando ${productFiles.length} imagem(ns)... aguarde.`);
-
     const response = await fetch('/remove-bg', { method: 'POST', body: formData });
     progressBar.style.width = '90%';
-
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.error || 'Erro desconhecido.');
-    }
-
-    const zipBlob     = await response.blob();
+    if (!response.ok) { const err = await response.json(); throw new Error(err.error || 'Erro desconhecido.'); }
+    const zipBlob = await response.blob();
     const arrayBuffer = await zipBlob.arrayBuffer();
-    const entries     = await unzipAll(arrayBuffer);
-
+    const entries = await unzipAll(arrayBuffer);
     progressBar.style.width = '100%';
     setTimeout(() => { progressWrap.style.display = 'none'; progressBar.style.width = '0%'; }, 600);
-
     const grid = document.getElementById('result-grid');
     entries.forEach(({ name, blob }) => {
       resultFiles.push({ name, blob });
       const url  = URL.createObjectURL(blob);
       const item = document.createElement('div');
       item.className = 'result-item' + (fundoBranco ? ' white-bg' : '');
-      const img  = document.createElement('img');
-      img.src = url; img.alt = name;
+      const img = document.createElement('img'); img.src = url; img.alt = name;
       const btnDl = document.createElement('button');
-      btnDl.className   = 'btn-dl-individual';
+      btnDl.className = 'btn-dl-individual';
       btnDl.textContent = '⬇️ ' + name;
-      btnDl.onclick     = () => downloadBlob(blob, name);
+      btnDl.onclick = () => downloadBlob(blob, name);
       item.appendChild(img); item.appendChild(btnDl);
       grid.appendChild(item);
     });
-
     setStatus(`✓ ${entries.length} imagem(ns) prontas!`, 'success');
     document.getElementById('result-card').classList.add('visible');
-
   } catch (err) {
     progressWrap.style.display = 'none';
     setStatus('Erro: ' + err.message, 'error');
