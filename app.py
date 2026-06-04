@@ -3,7 +3,7 @@ from flask_cors import CORS
 from rembg import remove, new_session
 from PIL import Image
 import numpy as np
-from scipy.ndimage import binary_fill_holes, gaussian_filter
+from scipy.ndimage import label, gaussian_filter
 import io
 import os
 import zipfile
@@ -34,35 +34,66 @@ def remove_bg(image_bytes):
     buf = io.BytesIO()
     image.save(buf, format="PNG")
     raw = remove(buf.getvalue(), session=session)
+
+    # Pós-processamento — ordem importa:
+    # 1. Remove furos internos (deve ser feito no RGBA, antes de qualquer fundo)
+    # 2. Suaviza bordas
     cleaned = remove_internal_holes(raw)
     return refine_edges(cleaned)
 
 
-def remove_internal_holes(rgba_bytes):
+def remove_internal_holes(rgba_bytes, white_thresh=230, min_hole_px=10):
     """
     Remove ilhas de fundo presas DENTRO do objeto (furos, grades, malhas).
 
-    O rembg remove o fundo externo mas deixa os buracos internos opacos.
-    scipy.ndimage.binary_fill_holes detecta e preenche esses buracos na
-    máscara — a diferença entre a máscara preenchida e a original revela
-    exatamente quais pixels são furos internos.
+    Por que binary_fill_holes não funcionava:
+    O rembg marca os furos como alpha=255 (opacos) com cor branca/clara —
+    não os deixa transparentes. Então trabalhar só no canal alpha não resolve.
+
+    Estratégia correta — detecção por COR dentro da máscara:
+    1. Identifica pixels "brancos/claros" (RGB > thresh) com alpha alto
+       = são candidatos a fundo interno
+    2. Rotula regiões conectadas desses pixels brancos
+    3. Remove as regiões que tocam a borda da imagem (= fundo externo legítimo)
+    4. O que sobra = furos internos → alpha = 0
     """
     img   = Image.open(io.BytesIO(rgba_bytes)).convert("RGBA")
-    data  = np.array(img)
+    data  = np.array(img, dtype=np.float32)
     alpha = data[:, :, 3]
+    r, g, b = data[:, :, 0], data[:, :, 1], data[:, :, 2]
 
-    # Máscara binária: True = objeto
-    binary = alpha > 30
+    # Pixels "brancos/claros" com alpha alto = fundo não removido
+    is_bg_color = (
+        (r > white_thresh) &
+        (g > white_thresh) &
+        (b > white_thresh) &
+        (alpha > 200)
+    )
 
-    # Preenche todos os buracos internos da máscara
-    filled = binary_fill_holes(binary)
+    # Rotula regiões conectadas de pixels-fundo
+    labeled, num_features = label(is_bg_color)
 
-    # Furos internos = estavam fora da máscara original, dentro da preenchida
-    internal_holes = filled & ~binary
+    if num_features == 0:
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        return buf.getvalue()
 
-    # Torna os furos transparentes
-    new_alpha = alpha.copy()
-    new_alpha[internal_holes] = 0
+    # Marca labels que tocam qualquer borda = fundo externo (não remover)
+    h, w = is_bg_color.shape
+    border_labels = set()
+    border_labels.update(labeled[0, :].tolist())
+    border_labels.update(labeled[-1, :].tolist())
+    border_labels.update(labeled[:, 0].tolist())
+    border_labels.update(labeled[:, -1].tolist())
+    border_labels.discard(0)
+
+    # Furos internos = regiões que NÃO tocam a borda e têm pixels suficientes
+    new_alpha = np.array(img.split()[3], dtype=np.uint8)
+    for lbl in range(1, num_features + 1):
+        if lbl not in border_labels:
+            region = (labeled == lbl)
+            if region.sum() >= min_hole_px:   # ignora ruído de 1-2 pixels
+                new_alpha[region] = 0
 
     result = img.copy()
     result.putalpha(Image.fromarray(new_alpha))
@@ -73,12 +104,11 @@ def remove_internal_holes(rgba_bytes):
 
 
 def refine_edges(rgba_bytes, feather=0.8):
-    """Suavização leve de borda — aplicada após o flood fill."""
-    img   = Image.open(io.BytesIO(rgba_bytes)).convert("RGBA")
-    alpha = np.array(img.split()[3], dtype=np.float32)
+    """Suavização leve de borda."""
+    img    = Image.open(io.BytesIO(rgba_bytes)).convert("RGBA")
+    alpha  = np.array(img.split()[3], dtype=np.float32)
     smooth = gaussian_filter(alpha, sigma=feather)
-    # Mantém pixels opacos como opacos; suaviza só a transição de borda
-    final = np.where(alpha > 200, alpha, smooth).astype(np.uint8)
+    final  = np.where(alpha > 200, alpha, smooth).astype(np.uint8)
     result = img.copy()
     result.putalpha(Image.fromarray(final))
     buf = io.BytesIO()
