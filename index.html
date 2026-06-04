@@ -45,14 +45,10 @@
 
     .container { z-index: 1; width: 100%; max-width: 960px; display: flex; flex-direction: column; gap: 1.5rem; }
 
-    .card {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 20px; padding: 1.5rem;
-    }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 1.5rem; }
     .card-title {
       font-family: 'Syne', sans-serif; font-size: 0.7rem; font-weight: 600;
-      letter-spacing: 2px; text-transform: uppercase; color: var(--muted);
-      margin-bottom: 1rem;
+      letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 1rem;
     }
 
     .drop-zone {
@@ -60,29 +56,16 @@
       padding: 2rem 1.5rem; text-align: center; cursor: pointer;
       transition: border-color 0.2s, background 0.2s;
     }
-    .drop-zone:hover, .drop-zone.drag-over {
-      border-color: var(--accent); background: rgba(110,231,183,0.04);
-    }
+    .drop-zone:hover, .drop-zone.drag-over { border-color: var(--accent); background: rgba(110,231,183,0.04); }
     .drop-zone svg { width: 40px; height: 40px; stroke: var(--muted); margin-bottom: 0.75rem; transition: stroke 0.2s; }
     .drop-zone:hover svg { stroke: var(--accent); }
     .drop-zone p { color: var(--muted); font-size: 0.85rem; line-height: 1.6; }
     .drop-zone strong { color: var(--text); }
 
-    .products-grid {
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-      gap: 0.75rem; margin-top: 1rem;
-    }
-    .product-item {
-      background: var(--surface2); border: 1px solid var(--border);
-      border-radius: 12px; overflow: hidden; position: relative;
-    }
-    .product-item img {
-      width: 100%; height: 120px; object-fit: cover; display: block;
-    }
-    .product-item .item-name {
-      padding: 0.4rem 0.6rem; font-size: 0.72rem; color: var(--muted);
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
+    .products-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.75rem; margin-top: 1rem; }
+    .product-item { background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; position: relative; }
+    .product-item img { width: 100%; height: 120px; object-fit: cover; display: block; }
+    .product-item .item-name { padding: 0.4rem 0.6rem; font-size: 0.72rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .product-item .remove-btn {
       position: absolute; top: 6px; right: 6px;
       background: rgba(248,113,113,0.9); border: none; border-radius: 50%;
@@ -90,80 +73,56 @@
       font-size: 12px; display: flex; align-items: center; justify-content: center;
     }
 
-    .scale-row {
-      display: flex; align-items: center; gap: 1rem; margin-top: 1rem;
-    }
-    .scale-row label { font-size: 0.82rem; color: var(--muted); white-space: nowrap; }
-    .scale-row input[type=range] {
-      flex: 1; accent-color: var(--accent); height: 4px; cursor: pointer;
-    }
-    .scale-value {
-      font-size: 0.82rem; font-weight: 600; color: var(--accent);
-      min-width: 36px; text-align: right;
-    }
+    .scale-row { display: flex; align-items: center; gap: 1rem; margin-top: 1rem; }
+    .scale-row label { font-size: 0.82rem; color: var(--muted); white-space: nowrap; min-width: 160px; }
+    .scale-row input[type=range] { flex: 1; accent-color: var(--accent); cursor: pointer; }
+    .scale-value { font-size: 0.82rem; font-weight: 600; color: var(--accent); min-width: 42px; text-align: right; }
 
-    .preview-wrap {
-      margin-top: 1rem; display: none; flex-direction: column; gap: 0.5rem;
-    }
+    .preview-wrap { margin-top: 1.25rem; display: none; flex-direction: column; gap: 0.5rem; }
     .preview-wrap.visible { display: flex; }
     .preview-label { font-size: 0.75rem; color: var(--muted); }
     .preview-box {
-      width: 100%; max-width: 300px; aspect-ratio: 1;
+      width: 100%; max-width: 320px; aspect-ratio: 1;
       background: repeating-conic-gradient(#1a1a2e 0% 25%, #111118 0% 50%) 0 0/16px 16px;
       border-radius: 12px; border: 1px solid var(--border);
-      display: flex; align-items: center; justify-content: center;
-      overflow: hidden; position: relative;
+      position: relative; overflow: hidden;
     }
     .preview-box.white-bg { background: #ffffff; }
-    .preview-box img {
-      position: absolute;
-      max-width: 100%; max-height: 100%;
-      object-fit: contain;
-      transition: width 0.15s, height 0.15s;
+    .preview-box .prev-produto {
+      position: absolute; object-fit: contain;
+      transform: translate(-50%, -50%);
+      top: 50%; left: 50%;
+      transition: width 0.1s, height 0.1s;
     }
+    .preview-box .prev-extra {
+      position: absolute; object-fit: contain;
+      transition: width 0.1s, height 0.1s;
+    }
+    .prev-extra.inferior-direito { bottom: 4px; right: 4px; }
+    .prev-extra.superior-direito { top: 4px; right: 4px; }
 
     .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
     @media (max-width: 600px) { .options-grid { grid-template-columns: 1fr; } }
-
-    .option-card {
-      background: var(--surface2); border: 1px solid var(--border);
-      border-radius: 14px; padding: 1rem;
-    }
-    .option-header {
-      display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;
-    }
+    .option-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 14px; padding: 1rem; }
+    .option-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; }
     .option-label { font-size: 0.85rem; font-weight: 500; color: var(--text); }
     .option-desc { font-size: 0.75rem; color: var(--muted); margin-top: 0.2rem; }
 
     .switch { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
     .switch input { display: none; }
-    .slider {
-      position: absolute; inset: 0; background: var(--border);
-      border-radius: 999px; cursor: pointer; transition: background 0.25s;
-    }
-    .slider::before {
-      content: ''; position: absolute; width: 18px; height: 18px;
-      left: 3px; top: 3px; background: white; border-radius: 50%; transition: transform 0.25s;
-    }
+    .slider { position: absolute; inset: 0; background: var(--border); border-radius: 999px; cursor: pointer; transition: background 0.25s; }
+    .slider::before { content: ''; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; background: white; border-radius: 50%; transition: transform 0.25s; }
     .switch input:checked + .slider { background: var(--accent); }
     .switch input:checked + .slider::before { transform: translateX(20px); }
 
     .extra-upload { display: none; margin-top: 0.75rem; flex-direction: column; gap: 0.75rem; }
     .extra-upload.visible { display: flex; }
 
-    .mini-drop {
-      border: 2px dashed var(--border); border-radius: 10px;
-      padding: 0.75rem; text-align: center; cursor: pointer;
-      font-size: 0.8rem; color: var(--muted); transition: border-color 0.2s;
-    }
+    .mini-drop { border: 2px dashed var(--border); border-radius: 10px; padding: 0.75rem; text-align: center; cursor: pointer; font-size: 0.8rem; color: var(--muted); transition: border-color 0.2s; }
     .mini-drop:hover { border-color: var(--accent2); color: var(--accent2); }
     .mini-drop.has-file { border-color: var(--accent); color: var(--accent); }
 
-    .select-product {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 8px; padding: 0.5rem 0.75rem; color: var(--text);
-      font-family: 'DM Sans', sans-serif; font-size: 0.8rem; width: 100%;
-    }
+    .select-product { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.75rem; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 0.8rem; width: 100%; }
     .select-product option { background: var(--surface); }
 
     .btn-process {
@@ -179,11 +138,7 @@
     .btn-process:disabled { opacity: 0.4; cursor: not-allowed; }
 
     .progress-wrap { height: 4px; background: var(--border); border-radius: 4px; overflow: hidden; display: none; }
-    .progress-bar {
-      height: 100%; width: 0%; border-radius: 4px;
-      background: linear-gradient(90deg, var(--accent), var(--accent2));
-      transition: width 0.4s; animation: pulse 1.5s ease-in-out infinite;
-    }
+    .progress-bar { height: 100%; width: 0%; border-radius: 4px; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width 0.4s; animation: pulse 1.5s ease-in-out infinite; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
 
     #status { font-size: 0.82rem; text-align: center; min-height: 1.2rem; color: var(--muted); }
@@ -192,36 +147,13 @@
 
     .result-card { display: none; }
     .result-card.visible { display: block; }
-    .result-grid {
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-      gap: 1rem; margin-top: 0.5rem;
-    }
-    .result-item {
-      background: var(--surface2); border: 1px solid var(--border);
-      border-radius: 12px; overflow: hidden; text-align: center;
-    }
-    .result-item img {
-      width: 100%; height: 160px; object-fit: contain;
-      background: repeating-conic-gradient(#1a1a2e 0% 25%, #111118 0% 50%) 0 0/16px 16px;
-      display: block;
-    }
+    .result-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; margin-top: 0.5rem; }
+    .result-item { background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; text-align: center; }
+    .result-item img { width: 100%; height: 160px; object-fit: contain; background: repeating-conic-gradient(#1a1a2e 0% 25%, #111118 0% 50%) 0 0/16px 16px; display: block; }
     .result-item.white-bg img { background: #ffffff; }
-    .btn-dl-individual {
-      display: block; width: 100%; padding: 0.6rem;
-      border: none; border-top: 1px solid var(--border);
-      background: transparent; color: var(--accent);
-      font-family: 'DM Sans', sans-serif; font-size: 0.8rem;
-      cursor: pointer; transition: background 0.2s;
-    }
+    .btn-dl-individual { display: block; width: 100%; padding: 0.6rem; border: none; border-top: 1px solid var(--border); background: transparent; color: var(--accent); font-family: 'DM Sans', sans-serif; font-size: 0.8rem; cursor: pointer; transition: background 0.2s; }
     .btn-dl-individual:hover { background: rgba(110,231,183,0.08); }
-
-    .btn-download-all {
-      display: flex; align-items: center; justify-content: center; gap: 0.5rem;
-      width: 100%; padding: 0.85rem; border-radius: 12px; border: 1px solid var(--accent);
-      background: transparent; color: var(--accent);
-      font-family: 'DM Sans', sans-serif; font-size: 0.9rem; font-weight: 500;
-      cursor: pointer; transition: background 0.2s; margin-top: 1rem;
-    }
+    .btn-download-all { display: flex; align-items: center; justify-content: center; gap: 0.5rem; width: 100%; padding: 0.85rem; border-radius: 12px; border: 1px solid var(--accent); background: transparent; color: var(--accent); font-family: 'DM Sans', sans-serif; font-size: 0.9rem; font-weight: 500; cursor: pointer; transition: background 0.2s; margin-top: 1rem; }
     .btn-download-all:hover { background: rgba(110,231,183,0.08); }
   </style>
 </head>
@@ -248,16 +180,23 @@
     </div>
     <div class="products-grid" id="products-grid"></div>
 
-    <div class="scale-row" id="scale-row" style="display:none">
-      <label>Tamanho da peça</label>
-      <input type="range" id="scale-slider" min="30" max="100" value="90"/>
-      <span class="scale-value" id="scale-value">90%</span>
+    <div class="scale-row" id="scale-row-produto" style="display:none">
+      <label>🔧 Tamanho da peça</label>
+      <input type="range" id="scale-produto" min="30" max="150" value="90"/>
+      <span class="scale-value" id="val-produto">90%</span>
+    </div>
+
+    <div class="scale-row" id="scale-row-extra" style="display:none">
+      <label>📦 Tamanho da caixinha/veículo</label>
+      <input type="range" id="scale-extra" min="30" max="150" value="40"/>
+      <span class="scale-value" id="val-extra">40%</span>
     </div>
 
     <div class="preview-wrap" id="preview-wrap">
-      <div class="preview-label">Pré-visualização (primeira peça):</div>
+      <div class="preview-label">Pré-visualização:</div>
       <div class="preview-box" id="preview-box">
-        <img id="preview-img" src="" alt="preview"/>
+        <img class="prev-produto" id="prev-produto" src="" alt=""/>
+        <img class="prev-extra inferior-direito" id="prev-extra" src="" alt="" style="display:none"/>
       </div>
     </div>
   </div>
@@ -272,10 +211,7 @@
             <div class="option-label">Fundo branco</div>
             <div class="option-desc">Desligado = fundo transparente</div>
           </div>
-          <label class="switch">
-            <input type="checkbox" id="toggle-branco"/>
-            <span class="slider"></span>
-          </label>
+          <label class="switch"><input type="checkbox" id="toggle-branco"/><span class="slider"></span></label>
         </div>
       </div>
 
@@ -285,10 +221,7 @@
             <div class="option-label">Colagem com caixinha</div>
             <div class="option-desc">Produto ao lado da caixa</div>
           </div>
-          <label class="switch">
-            <input type="checkbox" id="toggle-box"/>
-            <span class="slider"></span>
-          </label>
+          <label class="switch"><input type="checkbox" id="toggle-box"/><span class="slider"></span></label>
         </div>
         <div class="extra-upload" id="box-upload">
           <div class="mini-drop" id="drop-box">
@@ -307,10 +240,7 @@
             <div class="option-label">Colagem com veículo</div>
             <div class="option-desc">Produto ao lado do carro</div>
           </div>
-          <label class="switch">
-            <input type="checkbox" id="toggle-vehicle"/>
-            <span class="slider"></span>
-          </label>
+          <label class="switch"><input type="checkbox" id="toggle-vehicle"/><span class="slider"></span></label>
         </div>
         <div class="extra-upload" id="vehicle-upload">
           <div class="mini-drop" id="drop-vehicle">
@@ -334,19 +264,15 @@
       Processar Imagens
     </button>
     <br>
-    <div class="progress-wrap" id="progress-wrap">
-      <div class="progress-bar" id="progress-bar"></div>
-    </div>
+    <div class="progress-wrap" id="progress-wrap"><div class="progress-bar" id="progress-bar"></div></div>
     <br>
     <div id="status"></div>
   </div>
 
   <div class="card result-card" id="result-card">
-    <div class="card-title">✅ Resultado — clique em cada imagem para baixar</div>
+    <div class="card-title">✅ Resultado — clique para baixar individualmente</div>
     <div class="result-grid" id="result-grid"></div>
-    <button class="btn-download-all" id="btn-download-all">
-      ⬇️ Baixar todas de uma vez
-    </button>
+    <button class="btn-download-all" id="btn-download-all">⬇️ Baixar todas de uma vez</button>
   </div>
 
 </div>
@@ -355,17 +281,23 @@
   const productFiles = [];
   let boxFile = null;
   let vehicleFile = null;
+  let boxObjectURL = null;
+  let vehicleObjectURL = null;
   let resultFiles = [];
 
-  const dropProducts = document.getElementById('drop-products');
+  const dropProducts  = document.getElementById('drop-products');
   const inputProducts = document.getElementById('input-products');
-  const productsGrid = document.getElementById('products-grid');
-  const scaleRow = document.getElementById('scale-row');
-  const scaleSlider = document.getElementById('scale-slider');
-  const scaleValueEl = document.getElementById('scale-value');
-  const previewWrap = document.getElementById('preview-wrap');
-  const previewBox = document.getElementById('preview-box');
-  const previewImg = document.getElementById('preview-img');
+  const productsGrid  = document.getElementById('products-grid');
+  const scaleRowProd  = document.getElementById('scale-row-produto');
+  const scaleRowExtra = document.getElementById('scale-row-extra');
+  const scaleProd     = document.getElementById('scale-produto');
+  const scaleExtra    = document.getElementById('scale-extra');
+  const valProd       = document.getElementById('val-produto');
+  const valExtra      = document.getElementById('val-extra');
+  const previewWrap   = document.getElementById('preview-wrap');
+  const previewBox    = document.getElementById('preview-box');
+  const prevProdImg   = document.getElementById('prev-produto');
+  const prevExtraImg  = document.getElementById('prev-extra');
 
   dropProducts.addEventListener('click', () => inputProducts.click());
   dropProducts.addEventListener('dragover', e => { e.preventDefault(); dropProducts.classList.add('drag-over'); });
@@ -379,7 +311,6 @@
       const idx = productFiles.length - 1;
       const div = document.createElement('div');
       div.className = 'product-item';
-      div.dataset.idx = idx;
       const img = document.createElement('img');
       img.src = URL.createObjectURL(f);
       const name = document.createElement('div');
@@ -396,22 +327,49 @@
     checkReady();
     updatePreview();
     if (productFiles.length > 0) {
-      scaleRow.style.display = 'flex';
+      scaleRowProd.style.display = 'flex';
       previewWrap.classList.add('visible');
     }
   }
 
+  scaleProd.addEventListener('input', () => { valProd.textContent = scaleProd.value + '%'; updatePreview(); });
+  scaleExtra.addEventListener('input', () => { valExtra.textContent = scaleExtra.value + '%'; updatePreview(); });
+  document.getElementById('toggle-branco').addEventListener('change', updatePreview);
+
   function updatePreview() {
     if (productFiles.length === 0) {
       previewWrap.classList.remove('visible');
-      scaleRow.style.display = 'none';
+      scaleRowProd.style.display = 'none';
       return;
     }
-    const scale = parseInt(scaleSlider.value) / 100;
-    previewImg.src = URL.createObjectURL(productFiles[0]);
-    previewImg.style.width = (scale * 100) + '%';
-    previewImg.style.height = (scale * 100) + '%';
-    previewImg.style.objectFit = 'contain';
+    const scaleProdVal  = parseInt(scaleProd.value) / 100;
+    const scaleExtraVal = parseInt(scaleExtra.value) / 100;
+    const BOX_SIZE = 300;
+
+    prevProdImg.src = URL.createObjectURL(productFiles[0]);
+    const prodDim = Math.round(BOX_SIZE * scaleProdVal);
+    prevProdImg.style.width  = prodDim + 'px';
+    prevProdImg.style.height = prodDim + 'px';
+
+    const useBox     = document.getElementById('toggle-box').checked;
+    const useVehicle = document.getElementById('toggle-vehicle').checked;
+    const hasExtra   = (boxFile && useBox) || (vehicleFile && useVehicle);
+
+    if (hasExtra) {
+      const isVehicleOnly = useVehicle && vehicleFile && !(useBox && boxFile);
+      const extraUrl = isVehicleOnly ? vehicleObjectURL : boxObjectURL;
+      prevExtraImg.src = extraUrl;
+      prevExtraImg.style.display = 'block';
+      const extraDim = Math.round(BOX_SIZE * scaleExtraVal);
+      prevExtraImg.style.width  = extraDim + 'px';
+      prevExtraImg.style.height = extraDim + 'px';
+      prevExtraImg.className = 'prev-extra ' + (isVehicleOnly ? 'superior-direito' : 'inferior-direito');
+      scaleRowExtra.style.display = 'flex';
+    } else {
+      prevExtraImg.style.display = 'none';
+      scaleRowExtra.style.display = 'none';
+    }
+
     if (document.getElementById('toggle-branco').checked) {
       previewBox.classList.add('white-bg');
     } else {
@@ -419,15 +377,8 @@
     }
   }
 
-  scaleSlider.addEventListener('input', () => {
-    scaleValueEl.textContent = scaleSlider.value + '%';
-    updatePreview();
-  });
-
-  document.getElementById('toggle-branco').addEventListener('change', updatePreview);
-
   function updateSelects() {
-    ['select-box-product', 'select-vehicle-product'].forEach(id => {
+    ['select-box-product','select-vehicle-product'].forEach(id => {
       const sel = document.getElementById(id);
       const val = sel.value;
       sel.innerHTML = '<option value="">— Escolha o produto para usar —</option>';
@@ -443,25 +394,39 @@
 
   document.getElementById('toggle-box').addEventListener('change', function() {
     document.getElementById('box-upload').classList.toggle('visible', this.checked);
+    updatePreview();
   });
   document.getElementById('toggle-vehicle').addEventListener('change', function() {
     document.getElementById('vehicle-upload').classList.toggle('visible', this.checked);
+    updatePreview();
   });
 
-  const dropBox = document.getElementById('drop-box');
+  const dropBox  = document.getElementById('drop-box');
   const inputBox = document.getElementById('input-box');
   dropBox.addEventListener('click', () => inputBox.click());
   inputBox.addEventListener('change', () => {
     boxFile = inputBox.files[0];
-    if (boxFile) { dropBox.textContent = '✅ ' + boxFile.name; dropBox.classList.add('has-file'); }
+    if (boxFile) {
+      boxObjectURL = URL.createObjectURL(boxFile);
+      dropBox.textContent = '✅ ' + boxFile.name;
+      dropBox.classList.add('has-file');
+      scaleRowExtra.style.display = 'flex';
+      updatePreview();
+    }
   });
 
-  const dropVehicle = document.getElementById('drop-vehicle');
+  const dropVehicle  = document.getElementById('drop-vehicle');
   const inputVehicle = document.getElementById('input-vehicle');
   dropVehicle.addEventListener('click', () => inputVehicle.click());
   inputVehicle.addEventListener('change', () => {
     vehicleFile = inputVehicle.files[0];
-    if (vehicleFile) { dropVehicle.textContent = '✅ ' + vehicleFile.name; dropVehicle.classList.add('has-file'); }
+    if (vehicleFile) {
+      vehicleObjectURL = URL.createObjectURL(vehicleFile);
+      dropVehicle.textContent = '✅ ' + vehicleFile.name;
+      dropVehicle.classList.add('has-file');
+      scaleRowExtra.style.display = 'flex';
+      updatePreview();
+    }
   });
 
   function checkReady() {
@@ -474,9 +439,9 @@
   }
 
   document.getElementById('btn-process').addEventListener('click', async () => {
-    const btnProcess = document.getElementById('btn-process');
+    const btnProcess   = document.getElementById('btn-process');
     const progressWrap = document.getElementById('progress-wrap');
-    const progressBar = document.getElementById('progress-bar');
+    const progressBar  = document.getElementById('progress-bar');
 
     btnProcess.disabled = true;
     progressWrap.style.display = 'block';
@@ -486,14 +451,15 @@
     document.getElementById('result-grid').innerHTML = '';
     resultFiles = [];
 
-    const useBox = document.getElementById('toggle-box').checked;
-    const useVehicle = document.getElementById('toggle-vehicle').checked;
+    const useBox      = document.getElementById('toggle-box').checked;
+    const useVehicle  = document.getElementById('toggle-vehicle').checked;
     const fundoBranco = document.getElementById('toggle-branco').checked;
 
     const formData = new FormData();
     productFiles.forEach(f => formData.append('produtos', f));
-    formData.append('fundo_branco', fundoBranco ? 'true' : 'false');
-    formData.append('escala_produto', scaleSlider.value);
+    formData.append('fundo_branco',   fundoBranco ? 'true' : 'false');
+    formData.append('escala_produto', scaleProd.value);
+    formData.append('escala_extra',   scaleExtra.value);
 
     formData.append('usar_caixinha', useBox ? 'true' : 'false');
     if (useBox && boxFile) {
@@ -509,7 +475,7 @@
 
     try {
       progressBar.style.width = '40%';
-      setStatus(`Processando ${productFiles.length} imagem(ns)... pode demorar alguns segundos.`);
+      setStatus(`Processando ${productFiles.length} imagem(ns)... aguarde.`);
 
       const response = await fetch('/remove-bg', { method: 'POST', body: formData });
       progressBar.style.width = '90%';
@@ -519,9 +485,9 @@
         throw new Error(err.error || 'Erro desconhecido.');
       }
 
-      const zipBlob = await response.blob();
+      const zipBlob     = await response.blob();
       const arrayBuffer = await zipBlob.arrayBuffer();
-      const entries = await unzipAll(arrayBuffer);
+      const entries     = await unzipAll(arrayBuffer);
 
       progressBar.style.width = '100%';
       setTimeout(() => { progressWrap.style.display = 'none'; progressBar.style.width = '0%'; }, 600);
@@ -529,18 +495,16 @@
       const grid = document.getElementById('result-grid');
       entries.forEach(({ name, blob }) => {
         resultFiles.push({ name, blob });
-        const url = URL.createObjectURL(blob);
+        const url  = URL.createObjectURL(blob);
         const item = document.createElement('div');
         item.className = 'result-item' + (fundoBranco ? ' white-bg' : '');
-        const img = document.createElement('img');
-        img.src = url;
-        img.alt = name;
+        const img  = document.createElement('img');
+        img.src = url; img.alt = name;
         const btnDl = document.createElement('button');
-        btnDl.className = 'btn-dl-individual';
+        btnDl.className   = 'btn-dl-individual';
         btnDl.textContent = '⬇️ ' + name;
-        btnDl.onclick = () => downloadBlob(blob, name);
-        item.appendChild(img);
-        item.appendChild(btnDl);
+        btnDl.onclick     = () => downloadBlob(blob, name);
+        item.appendChild(img); item.appendChild(btnDl);
         grid.appendChild(item);
       });
 
@@ -562,8 +526,7 @@
   function downloadBlob(blob, name) {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = name;
-    a.click();
+    a.download = name; a.click();
   }
 
   async function unzipAll(arrayBuffer) {
@@ -575,46 +538,36 @@
     }
     if (eocdOffset === -1) throw new Error('ZIP inválido');
     const centralDirOffset = view.getUint32(eocdOffset + 16, true);
-    const totalEntries = view.getUint16(eocdOffset + 10, true);
+    const totalEntries     = view.getUint16(eocdOffset + 10, true);
     let offset = centralDirOffset;
     for (let i = 0; i < totalEntries; i++) {
       if (view.getUint32(offset, true) !== 0x02014b50) break;
       const compMethod = view.getUint16(offset + 10, true);
-      const compSize = view.getUint32(offset + 20, true);
-      const fnLen = view.getUint16(offset + 28, true);
-      const extraLen = view.getUint16(offset + 30, true);
+      const compSize   = view.getUint32(offset + 20, true);
+      const fnLen      = view.getUint16(offset + 28, true);
+      const extraLen   = view.getUint16(offset + 30, true);
       const commentLen = view.getUint16(offset + 32, true);
-      const localHeaderOffset = view.getUint32(offset + 42, true);
-      const name = new TextDecoder().decode(new Uint8Array(arrayBuffer, offset + 46, fnLen));
+      const localOff   = view.getUint32(offset + 42, true);
+      const name       = new TextDecoder().decode(new Uint8Array(arrayBuffer, offset + 46, fnLen));
       offset += 46 + fnLen + extraLen + commentLen;
-      const lhExtraLen = view.getUint16(localHeaderOffset + 28, true);
-      const dataOffset = localHeaderOffset + 30 + fnLen + lhExtraLen;
-      const compData = new Uint8Array(arrayBuffer, dataOffset, compSize);
+      const lhExtra  = view.getUint16(localOff + 28, true);
+      const dataOff  = localOff + 30 + fnLen + lhExtra;
+      const compData = new Uint8Array(arrayBuffer, dataOff, compSize);
       let fileData;
       if (compMethod === 0) {
         fileData = compData;
       } else if (compMethod === 8) {
         const ds = new DecompressionStream('deflate-raw');
         const writer = ds.writable.getWriter();
-        writer.write(compData);
-        writer.close();
-        const chunks = [];
-        const reader = ds.readable.getReader();
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          chunks.push(value);
-        }
+        writer.write(compData); writer.close();
+        const chunks = []; const reader = ds.readable.getReader();
+        while (true) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); }
         const total = chunks.reduce((s, c) => s + c.length, 0);
         fileData = new Uint8Array(total);
-        let pos = 0;
-        chunks.forEach(c => { fileData.set(c, pos); pos += c.length; });
-      } else {
-        continue;
-      }
+        let pos = 0; chunks.forEach(c => { fileData.set(c, pos); pos += c.length; });
+      } else { continue; }
       if (!name.endsWith('/')) {
-        const blob = new Blob([fileData], { type: 'image/png' });
-        results.push({ name, blob });
+        results.push({ name, blob: new Blob([fileData], { type: 'image/png' }) });
       }
     }
     return results;
