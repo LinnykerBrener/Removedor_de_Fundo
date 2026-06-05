@@ -3,7 +3,7 @@ from flask_cors import CORS
 from rembg import remove, new_session
 from PIL import Image
 import numpy as np
-from scipy.ndimage import label, gaussian_filter
+from scipy.ndimage import gaussian_filter
 import io
 import os
 import zipfile
@@ -27,84 +27,15 @@ def allowed_file(filename):
 #  REMOÇÃO DE FUNDO
 # ─────────────────────────────────────────────────────────────
 def remove_bg(image_bytes):
-    """Remove fundo com rembg e aplica pós-processamento profissional."""
     image = Image.open(io.BytesIO(image_bytes))
     if max(image.size) > 1200:
         image.thumbnail((1200, 1200), Image.LANCZOS)
     buf = io.BytesIO()
     image.save(buf, format="PNG")
     raw = remove(buf.getvalue(), session=session)
-
-    # Pós-processamento — ordem importa:
-    # 1. Remove furos internos (deve ser feito no RGBA, antes de qualquer fundo)
-    # 2. Suaviza bordas
-    cleaned = remove_internal_holes(raw)
-    return refine_edges(cleaned)
-
-
-def remove_internal_holes(rgba_bytes, white_thresh=160, min_hole_px=10):
-    """
-    Remove ilhas de fundo presas DENTRO do objeto (furos, grades, malhas).
-
-    Por que binary_fill_holes não funcionava:
-    O rembg marca os furos como alpha=255 (opacos) com cor branca/clara —
-    não os deixa transparentes. Então trabalhar só no canal alpha não resolve.
-
-    Estratégia correta — detecção por COR dentro da máscara:
-    1. Identifica pixels "brancos/claros" (RGB > thresh) com alpha alto
-       = são candidatos a fundo interno
-    2. Rotula regiões conectadas desses pixels brancos
-    3. Remove as regiões que tocam a borda da imagem (= fundo externo legítimo)
-    4. O que sobra = furos internos → alpha = 0
-    """
-    img   = Image.open(io.BytesIO(rgba_bytes)).convert("RGBA")
-    data  = np.array(img, dtype=np.float32)
-    alpha = data[:, :, 3]
-    r, g, b = data[:, :, 0], data[:, :, 1], data[:, :, 2]
-
-    # Pixels claros com alpha alto = fundo não removido (externo ou interno)
-    # Usa brilho médio para capturar tanto branco puro quanto cinza/metálico
-    brightness = (r + g + b) / 3.0
-    is_bg_color = (
-        (brightness > white_thresh) &   # captura branco puro E cinza claro
-        (alpha > 200)
-    )
-
-    # Rotula regiões conectadas de pixels-fundo
-    labeled, num_features = label(is_bg_color)
-
-    if num_features == 0:
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        return buf.getvalue()
-
-    # Marca labels que tocam qualquer borda = fundo externo (não remover)
-    h, w = is_bg_color.shape
-    border_labels = set()
-    border_labels.update(labeled[0, :].tolist())
-    border_labels.update(labeled[-1, :].tolist())
-    border_labels.update(labeled[:, 0].tolist())
-    border_labels.update(labeled[:, -1].tolist())
-    border_labels.discard(0)
-
-    # Furos internos = regiões que NÃO tocam a borda e têm pixels suficientes
-    new_alpha = np.array(img.split()[3], dtype=np.uint8)
-    for lbl in range(1, num_features + 1):
-        if lbl not in border_labels:
-            region = (labeled == lbl)
-            if region.sum() >= min_hole_px:   # ignora ruído de 1-2 pixels
-                new_alpha[region] = 0
-
-    result = img.copy()
-    result.putalpha(Image.fromarray(new_alpha))
-
-    buf = io.BytesIO()
-    result.save(buf, format="PNG")
-    return buf.getvalue()
-
+    return refine_edges(raw)
 
 def refine_edges(rgba_bytes, feather=0.8):
-    """Suavização leve de borda."""
     img    = Image.open(io.BytesIO(rgba_bytes)).convert("RGBA")
     alpha  = np.array(img.split()[3], dtype=np.float32)
     smooth = gaussian_filter(alpha, sigma=feather)
@@ -114,7 +45,6 @@ def refine_edges(rgba_bytes, feather=0.8):
     buf = io.BytesIO()
     result.save(buf, format="PNG")
     return buf.getvalue()
-
 
 # ─────────────────────────────────────────────────────────────
 #  HELPERS DE COMPOSIÇÃO
@@ -209,10 +139,6 @@ def remove_background():
     pos_box_y     = parse_int_pos(request.form.get("pos_box_y",     "0"))
     pos_vehicle_x = parse_int_pos(request.form.get("pos_vehicle_x", "0"))
     pos_vehicle_y = parse_int_pos(request.form.get("pos_vehicle_y", "0"))
-
-    print(f"[DEBUG] prod={escala_produto:.2f} "
-          f"caixa={escala_caixinha:.2f} pos=({pos_box_x},{pos_box_y}) "
-          f"veiculo={escala_veiculo:.2f} pos=({pos_vehicle_x},{pos_vehicle_y})")
 
     produtos_files = request.files.getlist("produtos")
     if not produtos_files:
